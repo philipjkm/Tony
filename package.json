@@ -1,0 +1,26 @@
+{
+  "name": "poker-tournament",
+  "version": "1.0.0",
+  "description": "Sleek live poker tournament clock: TV display + phone remote",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "test:unit": "node --test test/engine.test.js",
+    "test:e2e": "node --test test/e2e.test.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^2.0.2",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.1"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  }
+}

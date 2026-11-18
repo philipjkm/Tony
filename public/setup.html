@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tournament Settings</title>
+  <link rel="stylesheet" href="/css/theme.css">
+  <link rel="stylesheet" href="/css/setup.css">
+</head>
+<body class="setup">
+  <header class="s-top">
+    <a class="brand" href="/"><div class="brand-mark">♠</div><span>Tournament Settings</span></a>
+    <nav class="s-nav">
+      <a href="#general">General</a><a href="#money">Buy-in &amp; Pool</a><a href="#payouts">Payouts</a>
+      <a href="#blinds">Blinds</a><a href="#players">Players</a><a href="#chips">Chips</a>
+    </nav>
+    <div class="s-top-links"><a class="btn" href="/display" target="_blank">📺 Display</a><a class="btn" href="/remote" target="_blank">📱 Remote</a></div>
+  </header>
+
+  <main class="s-main" id="form">
+    <section class="card" id="general">
+      <h2>General</h2>
+      <div class="grid g3">
+        <label class="f wide"><span>Tournament name</span><input data-k="name" type="text" maxlength="80"></label>
+        <label class="f"><span>Currency symbol</span><input data-k="currency" type="text" maxlength="4"></label>
+        <label class="f"><span>Starting stack (chips)</span><input data-k="startingStack" type="number" min="0" step="any"></label>
+      </div>
+    </section>
+
+    <section class="card" id="money">
+      <h2>Buy-in &amp; Prize Pool</h2>
+      <div class="grid g3">
+        <label class="f"><span>Buy-in (to prize pool)</span><input data-k="buyIn" type="number" min="0" step="any"></label>
+        <label class="f"><span>Entry fee / rake (not in pool)</span><input data-k="entryFee" type="number" min="0" step="any"></label>
+        <label class="f"><span>Prize pool</span>
+          <select data-k="prizePool.mode"><option value="auto">Automatic (buy-ins + rebuys + add-ons)</option><option value="fixed">Custom fixed amount</option></select>
+        </label>
+        <label class="f" data-show="prizePool.mode=fixed"><span>Custom prize pool</span><input data-k="prizePool.fixed" type="number" min="0" step="any"></label>
+        <label class="f" data-show="prizePool.mode=auto"><span>Added money</span><input data-k="prizePool.added" type="number" min="0" step="any"></label>
+        <label class="f" data-show="prizePool.mode=auto"><span>Guaranteed minimum</span><input data-k="prizePool.guarantee" type="number" min="0" step="any"></label>
+      </div>
+
+      <div class="split">
+        <div class="sub">
+          <h3><label class="sw"><input type="checkbox" data-k="rebuy.enabled"><i></i></label> Rebuys</h3>
+          <div class="grid g2" data-show="rebuy.enabled">
+            <label class="f"><span>Rebuy price</span><input data-k="rebuy.price" type="number" min="0" step="any"></label>
+            <label class="f"><span>Rebuy chips</span><input data-k="rebuy.chips" type="number" min="0" step="any"></label>
+            <label class="f"><span>Allowed through level (0 = always)</span><input data-k="rebuy.lastLevel" type="number" min="0" step="1"></label>
+            <label class="f"><span>Max per player (0 = unlimited)</span><input data-k="rebuy.maxPerPlayer" type="number" min="0" step="1"></label>
+          </div>
+        </div>
+        <div class="sub">
+          <h3><label class="sw"><input type="checkbox" data-k="addon.enabled"><i></i></label> Add-ons</h3>
+          <div class="grid g2" data-show="addon.enabled">
+            <label class="f"><span>Add-on price</span><input data-k="addon.price" type="number" min="0" step="any"></label>
+            <label class="f"><span>Add-on chips</span><input data-k="addon.chips" type="number" min="0" step="any"></label>
+            <label class="f"><span>Allowed through level (0 = always)</span><input data-k="addon.lastLevel" type="number" min="0" step="1"></label>
+            <label class="f"><span>Max per player (0 = unlimited)</span><input data-k="addon.maxPerPlayer" type="number" min="0" step="1"></label>
+          </div>
+        </div>
+      </div>
+      <div class="preview" id="pool-preview"></div>
+    </section>
+
+    <section class="card" id="payouts">
+      <h2>Payouts</h2>
+      <div class="row-tools">
+        <div class="seg" id="pay-mode"><button data-v="percent">Percent</button><button data-v="amount">Fixed amounts</button></div>
+        <div class="presets" id="pay-presets"></div>
+      </div>
+      <div class="pay-list" id="pay-list"></div>
+      <div class="row-tools"><button class="btn" id="pay-add">＋ Add place</button><span class="sum" id="pay-sum"></span></div>
+    </section>
+
+    <section class="card" id="blinds">
+      <h2>Blind Structure</h2>
+      <div class="gen">
+        <div class="gen-h">Quick generate</div>
+        <div class="grid g6">
+          <label class="f"><span>Levels</span><input id="g-count" type="number" value="16" min="1" max="60"></label>
+          <label class="f"><span>Minutes / level</span><input id="g-min" type="number" value="15" min="1" step="any"></label>
+          <label class="f"><span>Starting big blind</span><input id="g-bb" type="number" value="50" min="1"></label>
+          <label class="f"><span>Speed</span><select id="g-speed"><option value="1.25">Slow</option><option value="1.35" selected>Standard</option><option value="1.5">Turbo</option></select></label>
+          <label class="f"><span>Ante from level (0 = none)</span><input id="g-ante" type="number" value="4" min="0"></label>
+          <label class="f"><span>Break every N levels (0 = none)</span><input id="g-break" type="number" value="4" min="0"></label>
+        </div>
+        <button class="btn btn-gold" id="g-go">Generate structure</button>
+      </div>
+      <div class="lv-table">
+        <div class="lv-head"><span>#</span><span>Small blind</span><span>Big blind</span><span>Ante</span><span>Minutes</span><span></span></div>
+        <div id="lv-rows"></div>
+      </div>
+      <div class="row-tools">
+        <button class="btn" id="lv-add">＋ Add level</button>
+        <button class="btn" id="lv-break">☕ Add break</button>
+        <span class="sum" id="lv-sum"></span>
+      </div>
+    </section>
+
+    <section class="card" id="players">
+      <h2>Players <small id="pl-count"></small></h2>
+      <p class="help">Click a photo circle to upload a picture. Players keep their progress when you save, unless you start a new tournament.</p>
+      <div class="pl-grid" id="pl-grid"></div>
+      <form class="pl-add" id="pl-add">
+        <input id="pl-name" type="text" placeholder="Player name" maxlength="40" autocomplete="off">
+        <button class="btn btn-red" type="submit">＋ Add player</button>
+      </form>
+    </section>
+
+    <section class="card" id="chips">
+      <h2>Chip Denominations</h2>
+      <p class="help">Upload a photo of each chip (square crop works best) — shown on the TV. Without a photo a colored chip is drawn.</p>
+      <div class="ch-list" id="ch-list"></div>
+      <button class="btn" id="ch-add">＋ Add chip</button>
+    </section>
+  </main>
+
+  <footer class="s-bar">
+    <span class="s-status" id="s-status"></span>
+    <button class="btn" id="b-new">⟲ Start new tournament</button>
+    <button class="btn btn-red" id="b-save">Save changes</button>
+  </footer>
+
+  <input type="file" id="file" accept="image/*" class="hidden">
+  <script src="/js/common.js"></script>
+  <script src="/js/setup.js"></script>
+</body>
+</html>
