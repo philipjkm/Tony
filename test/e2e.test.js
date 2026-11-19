@@ -154,11 +154,13 @@ test('end-to-end: settings → display → phone remote', { skip: !chromium, tim
     await phone.waitForSelector('.r-seat');
 
     await t.test('display shows table, players, pool and chips', async () => {
-      assert.equal(await display.locator('.seat').count(), NAMES.length);
+      assert.equal(await display.locator('.seat:not(.empty)').count(), NAMES.length);
+      assert.equal(await display.locator('.seat.empty').count(), 10 - NAMES.length, 'empty seats drawn');
+      assert.ok(await display.locator('#waiting.hidden').count(), 'no waiting list when everyone is seated');
       assert.equal(await display.locator('.seat img').count(), NAMES.length, 'player photos shown');
       assert.equal(await display.textContent('#pool'), '$340');
       assert.equal(await display.textContent('#blinds'), '100 / 200');
-      assert.equal(await display.textContent('#t-name'), 'Tony’s Home Game');
+      assert.doesNotMatch(await display.textContent('.topbar'), /Tony’s Home Game/, 'no name top-left');
       assert.ok(await display.locator('#chips .chip-img').count() >= 1, 'uploaded chip image shown');
       assert.equal(await display.locator('#payouts li').count(), 4);
       const clipped = await display.evaluate(() => {
@@ -362,6 +364,111 @@ test('API hardening', { timeout: 30000 }, async (t) => {
       assert.match(await r.text(), /<svg/);
     });
   } finally {
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('seat arranging: waiting list, drag & drop, tap-to-move, undo, settings shortcuts', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-seats-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const errors = [];
+  const api = async () => (await fetch(base + '/api/state')).json();
+  const seatOf = async (name) => (await api()).players.find((p) => p.name === name).seat;
+  try {
+    const names = ['Ann', 'Ben', 'Cat', 'Dan', 'Eve'];
+    const r = await fetch(base + '/api/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset: true, config: { seats: 4 }, players: names.map((name) => ({ name })) }),
+    });
+    assert.equal((await r.json()).ok, true);
+    assert.equal(await seatOf('Eve'), null, '5th player waits when 4 seats');
+
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    display.on('pageerror', (e) => errors.push('display: ' + e.message));
+    await display.goto(base + '/display');
+    await display.waitForSelector('#waiting:not(.hidden)');
+    assert.match(await display.textContent('#wl'), /Eve/);
+
+    const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+    const phone = await ctx.newPage();
+    phone.on('pageerror', (e) => errors.push('remote: ' + e.message));
+    await phone.goto(base + '/remote');
+    await phone.waitForSelector('.r-rp[aria-label="Eve"]');
+
+    await t.test('drag a waiting player onto a seat swaps them', async () => {
+      await phone.tap('#b-arrange');
+      await phone.waitForSelector('.r-table-wrap.arranging');
+      const from = await phone.locator('.r-rp[aria-label="Eve"]').boundingBox();
+      const to = await phone.locator('.r-seat[aria-label="Ann"]').boundingBox();
+      await phone.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+      await phone.mouse.down();
+      for (let i = 1; i <= 12; i++) {
+        await phone.mouse.move(from.x + from.width / 2 + ((to.x - from.x) * i) / 12, from.y + from.height / 2 + ((to.y - from.y) * i) / 12);
+      }
+      await phone.mouse.move(to.x + to.width / 2, to.y + to.height / 2);
+      await phone.mouse.up();
+      await phone.waitForSelector('.r-rp[aria-label="Ann"]');
+      assert.equal(await seatOf('Eve'), 0);
+      assert.equal(await seatOf('Ann'), null);
+      await display.waitForFunction(() => /Ann/.test(document.getElementById('wl').textContent));
+    });
+
+    await t.test('tap-to-move: tap player, then tap a seat', async () => {
+      await phone.tap('.r-rp[aria-label="Ann"]');
+      await phone.waitForSelector('.r-rp.picked');
+      await phone.tap('.r-seat[aria-label="Ben"]');
+      await phone.waitForSelector('.r-rp[aria-label="Ben"]');
+      assert.equal(await seatOf('Ann'), 1);
+    });
+
+    await t.test('send a seated player to the waiting list, then into the empty seat', async () => {
+      await phone.tap('.r-seat[aria-label="Cat"]');
+      await phone.tap('#r-railbox .r-rail-h');
+      await phone.waitForSelector('.r-rp[aria-label="Cat"]');
+      assert.equal(await seatOf('Cat'), null);
+      await display.waitForSelector('.seat.empty');
+      await phone.tap('.r-rp[aria-label="Ben"]');
+      await phone.tap('.r-seat.empty');
+      await phone.waitForFunction(() => !document.querySelector('.r-rp[aria-label="Ben"]'));
+      assert.equal(await seatOf('Ben'), 2);
+      await phone.screenshot({ path: path.join(SHOTS, 'remote-arrange.png') });
+      await display.waitForTimeout(800);
+      await display.screenshot({ path: path.join(SHOTS, 'display-waiting.png') });
+    });
+
+    await t.test('undo a seat move', async () => {
+      await phone.tap('#b-undo');
+      await phone.waitForSelector('.r-rp[aria-label="Ben"]');
+      assert.equal(await seatOf('Ben'), null);
+    });
+
+    await t.test('normal mode: tapping a waiting player opens the action sheet', async () => {
+      await phone.tap('#b-arrange');
+      await phone.tap('.r-rp[aria-label="Ben"]');
+      await phone.waitForSelector('#sheet.show');
+      assert.equal(await phone.textContent('#sh-head .nm'), 'Ben');
+      await phone.tap('#sh-close');
+    });
+
+    await t.test('settings shortcut menu deep-links into setup', async () => {
+      await phone.tap('#b-menu');
+      await phone.waitForSelector('#menu.show');
+      await phone.tap('#menu a[href="/setup#players"]');
+      await phone.waitForURL(/\/setup#players$/);
+      await phone.waitForSelector('.pl-card');
+      await phone.waitForFunction(() => Math.abs(document.getElementById('players').getBoundingClientRect().top) < 200);
+      assert.match(await phone.textContent('.pl-card:has(input[value="Ben"]) .st'), /Waiting/);
+      assert.match(await phone.textContent('.pl-card:has(input[value="Eve"]) .st'), /Seat 1/);
+      assert.ok(await phone.isVisible('.s-top-links a[href="/remote"]'), 'way back to the remote on phone');
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    await browser.close();
     await app.stop();
     fs.rmSync(dataDir, { recursive: true, force: true });
   }

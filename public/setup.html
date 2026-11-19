@@ -14,16 +14,17 @@
       <a href="#general">General</a><a href="#money">Buy-in &amp; Pool</a><a href="#payouts">Payouts</a>
       <a href="#blinds">Blinds</a><a href="#players">Players</a><a href="#chips">Chips</a>
     </nav>
-    <div class="s-top-links"><a class="btn" href="/display" target="_blank">📺 Display</a><a class="btn" href="/remote" target="_blank">📱 Remote</a></div>
+    <div class="s-top-links"><a class="btn" href="/display" target="_blank">📺 <span class="lbl">Display</span></a><a class="btn btn-red" href="/remote">📱 <span class="lbl">Remote</span></a></div>
   </header>
 
   <main class="s-main" id="form">
     <section class="card" id="general">
       <h2>General</h2>
-      <div class="grid g3">
+      <div class="grid g4">
         <label class="f wide"><span>Tournament name</span><input data-k="name" type="text" maxlength="80"></label>
         <label class="f"><span>Currency symbol</span><input data-k="currency" type="text" maxlength="4"></label>
         <label class="f"><span>Starting stack (chips)</span><input data-k="startingStack" type="number" min="0" step="any"></label>
+        <label class="f"><span>Seats at the table (2–12)</span><input data-k="seats" type="number" min="2" max="12" step="1"></label>
       </div>
     </section>
 
@@ -100,7 +101,7 @@
 
     <section class="card" id="players">
       <h2>Players <small id="pl-count"></small></h2>
-      <p class="help">Click a photo circle to upload a picture. Players keep their progress when you save, unless you start a new tournament.</p>
+      <p class="help">Tap a photo circle to upload a picture (on a phone you can take one with the camera). Players beyond the number of seats go to the waiting list — rearrange seats from the phone remote with <b>⇄ Arrange seats</b>.</p>
       <div class="pl-grid" id="pl-grid"></div>
       <form class="pl-add" id="pl-add">
         <input id="pl-name" type="text" placeholder="Player name" maxlength="40" autocomplete="off">

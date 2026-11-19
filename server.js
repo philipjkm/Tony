@@ -31,6 +31,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
   try {
     t = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     t.config = engine.normalizeConfig(t.config);
+    engine.fixSeats(t); // older saves have no seats yet
     if (t.clock && t.clock.running) {
       // server was stopped while running: restore the time left at the last save, paused
       const elapsed = Math.max(0, (t.savedAt || t.clock.anchor) - t.clock.anchor);

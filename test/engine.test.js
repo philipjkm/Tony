@@ -243,3 +243,44 @@ test('unknown action is rejected', () => {
   assert.throws(() => E.apply(t, { type: 'hack' }, T0), E.ActionError);
   assert.throws(() => E.apply(t, null, T0), E.ActionError);
 });
+
+test('seats: auto-assigned, overflow goes to waiting list', () => {
+  const t = make(5, { seats: 3 });
+  assert.deepEqual(t.players.map((p) => p.seat), [0, 1, 2, null, null]);
+  assert.equal(E.derive(t, T0).waitingCount, 2);
+});
+
+test('seats: move to empty seat, swap, and send to waiting list', () => {
+  const t = make(4, { seats: 4 });
+  E.apply(t, { type: 'player.seat', playerId: 'p4', seat: null }, T0); // p4 → waiting
+  assert.equal(P(t, 'p4').seat, null);
+  E.apply(t, { type: 'player.seat', playerId: 'p4', seat: 3 }, T0); // back to empty seat
+  assert.equal(P(t, 'p4').seat, 3);
+  E.apply(t, { type: 'player.seat', playerId: 'p1', seat: 2 }, T0); // swap with p3
+  assert.equal(P(t, 'p1').seat, 2);
+  assert.equal(P(t, 'p3').seat, 0);
+  E.apply(t, { type: 'player.seat', playerId: 'p2', seat: null }, T0);
+  E.apply(t, { type: 'player.seat', playerId: 'p1', seat: 1 }, T0); // into the freed seat
+  assert.equal(P(t, 'p1').seat, 1);
+  // waiting player dropped onto an occupied seat swaps that player to the waiting list
+  E.apply(t, { type: 'player.seat', playerId: 'p2', seat: 3 }, T0);
+  assert.equal(P(t, 'p2').seat, 3);
+  assert.equal(P(t, 'p4').seat, null);
+  assert.throws(() => E.apply(t, { type: 'player.seat', playerId: 'p2', seat: 9 }, T0), /no such seat/i);
+  // seat moves can be undone
+  E.apply(t, { type: 'undo' }, T0);
+  assert.equal(P(t, 'p2').seat, null);
+  assert.equal(P(t, 'p4').seat, 3);
+  const seats = t.players.map((p) => p.seat).filter((x) => x !== null);
+  assert.equal(new Set(seats).size, seats.length, 'no two players share a seat');
+});
+
+test('seats: shrinking the table moves extra players to waiting; new players fill free seats', () => {
+  const t = make(4, { seats: 6 });
+  const cfg = { ...t.config, seats: 3 };
+  E.updateSetup(t, cfg, [...t.players, { name: 'Late' }], T0);
+  assert.deepEqual(t.players.map((p) => p.seat), [0, 1, 2, null, null]);
+  E.updateSetup(t, { ...cfg, seats: 4 }, [...t.players, { name: 'Later' }], T0);
+  assert.equal(t.players.find((p) => p.name === 'Later').seat, 3, 'new player takes the free seat');
+  assert.equal(t.players[3].seat, null, 'existing waiting players stay waiting (host decides)');
+});

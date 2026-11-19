@@ -106,6 +106,7 @@
       box.className = 'toasts';
       document.body.appendChild(box);
     }
+    box.innerHTML = ''; // only the latest toast — they never pile up over the table
     const el = document.createElement('div');
     el.className = 'toast' + (error ? ' err' : '');
     el.innerHTML = `<span class="grow">${esc(msg)}</span>`;

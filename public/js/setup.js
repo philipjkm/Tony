@@ -313,12 +313,13 @@
     $('pl-grid').innerHTML = players.map((p, i) => {
       const pr = progress[p.id];
       const st = !pr ? 'New' : pr.status === 'out' ? `Out · ${ordinal(pr.place)}` : pr.place === 1 ? 'Champion' : 'Active';
+      const seat = !pr ? '' : pr.seat === null ? (pr.status === 'active' ? ' · Waiting' : '') : ` · Seat ${pr.seat + 1}`;
       const extra = pr && (pr.rebuys || pr.addons) ? ` · R${pr.rebuys} A${pr.addons}` : '';
       return `<div class="pl-card ${pr && pr.status === 'out' ? 'out' : ''}" data-i="${i}">
         <button class="x" data-rm-pl="${i}" title="Remove player">✕</button>
         <button class="ph" data-photo="${i}" title="Upload photo">${avatarHTML(p, 86)}</button>
         <input type="text" value="${esc(p.name)}" data-pl-name="${i}" maxlength="40">
-        <span class="st">${esc(st + extra)}</span></div>`;
+        <span class="st">${esc(st + seat + extra)}</span></div>`;
     }).join('');
   }
   $('pl-grid').addEventListener('input', (e) => {
@@ -443,5 +444,11 @@
     renderChips();
   }
 
-  load().catch(() => toast('Could not load the tournament', { error: true }));
+  load()
+    .then(() => {
+      // deep links from the phone remote (e.g. /setup#players): jump there once content exists
+      const target = location.hash && document.querySelector(location.hash);
+      if (target) target.scrollIntoView({ block: 'start' });
+    })
+    .catch(() => toast('Could not load the tournament', { error: true }));
 })();

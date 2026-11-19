@@ -7,6 +7,7 @@ const crypto = require('crypto');
 
 const uid = () => crypto.randomBytes(5).toString('hex');
 const MIN = 60 * 1000;
+const MAX_SEATS = 12;
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const num = (v, d = 0) => {
   const n = Number(v);
@@ -36,6 +37,7 @@ function defaultConfig() {
     buyIn: 50,
     entryFee: 0,
     startingStack: 10000,
+    seats: 10,
     rebuy: { enabled: true, price: 50, chips: 10000, lastLevel: 4, maxPerPlayer: 0 },
     addon: { enabled: true, price: 50, chips: 15000, lastLevel: 5, maxPerPlayer: 1 },
     prizePool: { mode: 'auto', fixed: 0, added: 0, guarantee: 0 },
@@ -81,6 +83,7 @@ function normalizeConfig(input) {
     buyIn: nonNeg(c.buyIn, d.buyIn),
     entryFee: nonNeg(c.entryFee, 0),
     startingStack: nonNeg(c.startingStack, d.startingStack),
+    seats: Math.min(MAX_SEATS, Math.max(2, Math.floor(num(c.seats, d.seats)))),
     rebuy: {
       enabled: !!(rebuy.enabled ?? d.rebuy.enabled),
       price: nonNeg(rebuy.price, d.rebuy.price),
@@ -126,14 +129,33 @@ function newPlayer(p) {
     rebuys: 0,
     addons: 0,
     eliminatedAt: null,
+    // seat index 0..seats-1, null = waiting for a seat, undefined = auto-assign
+    seat: p && (p.seat === null || Number.isInteger(p.seat)) ? p.seat : undefined,
   };
+}
+
+/** Make seats valid: in range, no duplicates, auto-seat players that have no seat decided yet. */
+function fixSeats(t) {
+  const n = t.config.seats;
+  const taken = new Set();
+  for (const p of t.players) {
+    if (Number.isInteger(p.seat) && p.seat >= 0 && p.seat < n && !taken.has(p.seat)) taken.add(p.seat);
+    else if (p.seat !== undefined) p.seat = null; // out of range / duplicate → waiting
+  }
+  for (const p of t.players) {
+    if (p.seat !== undefined) continue;
+    let free = -1;
+    for (let i = 0; i < n; i++) if (!taken.has(i)) { free = i; break; }
+    p.seat = free >= 0 ? free : null;
+    if (free >= 0) taken.add(free);
+  }
 }
 
 const levelMs = (level) => Math.round(level.minutes * MIN);
 
 function createTournament(config, players, now = Date.now()) {
   const cfg = normalizeConfig(config);
-  return {
+  const t = {
     id: uid(),
     config: cfg,
     players: (players || []).map(newPlayer),
@@ -142,6 +164,8 @@ function createTournament(config, players, now = Date.now()) {
     log: [],
     seq: 0,
   };
+  fixSeats(t);
+  return t;
 }
 
 /** Replace settings while keeping progress (players matched by id keep their runtime state). */
@@ -162,6 +186,7 @@ function updateSetup(t, config, players, now = Date.now()) {
       return newPlayer(p);
     });
   }
+  fixSeats(t);
   // keep clock sane against the new structure
   const c = t.clock;
   if (c.levelIndex >= cfg.levels.length) {
@@ -291,6 +316,7 @@ function derive(t, now = Date.now()) {
     levelDurationMs: levelMs(levels[idx]),
     entries,
     activeCount: active.length,
+    waitingCount: active.filter((p) => p.seat === null).length,
     rebuys,
     addons,
     prizePool,
@@ -455,6 +481,19 @@ function apply(t, action, now = Date.now()) {
       events.push({ type: 'addon', playerId: p.id, name: p.name, photo: p.photo });
       break;
     }
+    case 'player.seat': {
+      const p = findPlayer();
+      const target = action.seat === null || action.seat === undefined ? null : Math.floor(num(action.seat, -1));
+      if (target !== null && (target < 0 || target >= t.config.seats)) throw new ActionError('No such seat');
+      if (target === p.seat) break;
+      const before = snapshot();
+      const occupant = target === null ? null : t.players.find((x) => x.seat === target);
+      if (occupant) occupant.seat = p.seat; // swap (may send them to the waiting list)
+      p.seat = target;
+      pushLog(t, { id: uid(), ts: now, type: 'seat', playerId: p.id, name: p.name, seat: target, before });
+      events.push({ type: 'seat', playerId: p.id, seat: target, swappedWith: occupant ? occupant.id : null });
+      break;
+    }
     case 'undo': {
       const last = t.log.pop();
       if (!last) throw new ActionError('Nothing to undo');
@@ -508,4 +547,6 @@ module.exports = {
   publicState,
   levelNumberAt,
   levelMs,
+  MAX_SEATS,
+  fixSeats,
 };

@@ -12,8 +12,11 @@
 </head>
 <body class="remote">
   <header class="r-top">
-    <div class="brand"><div class="brand-mark">♠</div><span id="t-name">Remote</span></div>
-    <span class="conn" id="conn">…</span>
+    <div class="brand"><div class="brand-mark">♠</div></div>
+    <div class="r-top-r">
+      <span class="conn" id="conn">…</span>
+      <button class="icon-btn" id="b-menu" aria-label="Settings shortcuts">⚙</button>
+    </div>
   </header>
 
   <section class="clock-card" id="clock-card">
@@ -38,10 +41,17 @@
   <section class="r-stats" id="r-stats"></section>
 
   <section class="r-table-wrap">
-    <div class="r-hint">Tap a player</div>
+    <div class="r-bar">
+      <span class="r-hint" id="r-hint">Tap a player</span>
+      <button class="pill-btn" id="b-arrange">⇄ Arrange seats</button>
+    </div>
     <div class="r-table">
       <div class="r-rail"><div class="r-felt"><div class="r-felt-txt" id="r-felt-txt"></div></div></div>
       <div class="r-seats" id="r-seats"></div>
+    </div>
+    <div class="r-railbox hidden" id="r-railbox" data-drop="rail">
+      <div class="r-rail-h"><span>Waiting for a seat</span><small id="rail-tip"></small></div>
+      <div class="r-rail-list" id="r-rail-list"></div>
     </div>
   </section>
 
@@ -55,6 +65,22 @@
     <ul id="r-log"></ul>
     <div class="r-links"><a href="/setup">⚙ Settings</a><a href="/display">📺 Display</a></div>
   </section>
+
+  <!-- settings shortcuts -->
+  <div class="sheet menu" id="menu" role="dialog" aria-modal="true">
+    <div class="grab"></div>
+    <div class="menu-h">Change settings</div>
+    <div class="menu-grid">
+      <a href="/setup#players"><span>👥</span>Players &amp; photos</a>
+      <a href="/setup#blinds"><span>⏱</span>Blind structure</a>
+      <a href="/setup#money"><span>💰</span>Buy-in &amp; prize pool</a>
+      <a href="/setup#payouts"><span>🏆</span>Payouts</a>
+      <a href="/setup#chips"><span>🪙</span>Chips</a>
+      <a href="/setup#general"><span>⚙</span>General &amp; seats</a>
+    </div>
+    <a class="btn menu-wide" href="/display" target="_blank">📺 Open TV display</a>
+    <button class="btn btn-ghost sh-close" id="menu-close">Close</button>
+  </div>
 
   <!-- bottom sheet -->
   <div class="sheet-bg" id="sheet-bg"></div>

@@ -4,9 +4,9 @@ A sleek, dark-themed home poker tournament app. The **TV display** shows a live 
 
 ![TV display](docs/screenshots/display.png)
 
-| Phone remote | Tap a player |
-|---|---|
-| <img src="docs/screenshots/remote.png" width="300"> | <img src="docs/screenshots/remote-sheet.png" width="300"> |
+| Phone remote | Tap a player | Arrange seats |
+|---|---|---|
+| <img src="docs/screenshots/remote.png" width="250"> | <img src="docs/screenshots/remote-sheet.png" width="250"> | <img src="docs/screenshots/remote-arrange.png" width="250"> |
 
 ## Quick start (MacBook)
 
@@ -40,8 +40,18 @@ The display is drawn at 1920×1080 and scales to fit any screen. The mouse curso
 - **Tap a player** to open a sheet with **Eliminate**, **Rebuy** and **Add-on**.
   - Rebuy on an eliminated player is a **re-entry**: they come back into the game.
   - A button greys out with the reason when an option isn't allowed (for example "Rebuys closed after level 4" or "Max 1 add-on reached").
-- **Undo** reverses the last elimination, rebuy or add-on.
+- **Undo** reverses the last elimination, rebuy, add-on or seat move.
+- **⚙ (top right)** has shortcuts straight into Settings: players, blinds, prize pool, payouts, chips and seats. The Settings page has a 📱 button to get back.
 - Several phones can be used as remotes at the same time. Everything stays in sync.
+
+### Seats & waiting list
+Set the number of seats (2–12) in **Settings → General**. Players beyond that go on the **waiting list**, which shows at the bottom of the TV and below the table on the phone.
+
+On the phone, tap **⇄ Arrange seats**, then either:
+- **drag** a player onto a seat. Dropping onto someone swaps them, and dropping onto the waiting list takes the player off the table.
+- **tap** a player, then tap where they should go.
+
+Seat moves animate on the TV and can be undone. Tap **✓ Done** when finished.
 
 > If the phone can't connect: make sure it's on the same Wi-Fi, and allow incoming connections for `node` if macOS asks (System Settings → Network → Firewall).
 
@@ -66,7 +76,7 @@ Everything is saved to `data/` (state + uploaded images), so a restart or crash 
 ## Tests / QA
 ```bash
 npm test             # everything
-npm run test:unit    # engine logic (17 tests)
+npm run test:unit    # engine logic (20 tests)
 npm run test:e2e     # real browser: settings → TV → phone (needs Playwright)
 ```
 The end-to-end suite drives Settings, the TV display (1920×1080) and an iPhone-sized remote together in Chromium. It checks:

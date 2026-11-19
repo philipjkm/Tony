@@ -83,10 +83,10 @@
     const d = s.derived;
     const cur = cfg.currency;
     document.title = cfg.name + ' · Live';
-    $('t-name').textContent = cfg.name;
     const isBreak = d.level.type === 'break';
     $('level-pill').textContent = isBreak ? 'BREAK' : `LEVEL ${d.levelNumber} / ${d.levelCount}`;
-    $('lvl-label').textContent = isBreak ? (d.level.label || 'BREAK').toUpperCase() : `LEVEL ${d.levelNumber}`;
+    const paused = !d.running && !d.finished;
+    $('lvl-label').textContent = (paused ? '❚❚ PAUSED · ' : '') + (isBreak ? (d.level.label || 'BREAK').toUpperCase() : `LEVEL ${d.levelNumber}`);
     $('blinds').textContent = isBreak ? 'Break' : blindsText(d.level);
     $('ante').textContent = !isBreak && d.level.ante ? `ANTE ${fmtNum(d.level.ante)}` : '';
     const nl = d.nextLevel;
@@ -127,52 +127,71 @@
     tickClock();
   }
 
+  function seatSig(p, isWinner, size) {
+    return [p.name, p.photo, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
+  }
+  function seatInner(p, isWinner, size) {
+    const badges = (p.rebuys ? `<span class="badge r">R${p.rebuys > 1 ? '×' + p.rebuys : ''}</span>` : '')
+      + (p.addons ? `<span class="badge a">A${p.addons > 1 ? '×' + p.addons : ''}</span>` : '');
+    return `
+      ${isWinner ? '<div class="crown">👑</div>' : ''}
+      <div class="ring">${avatarHTML(p, size)}</div>
+      ${p.status === 'out' ? `<div class="outtag" style="top:${size / 2 - 6}px">OUT · ${ordinal(p.place)}</div>` : ''}
+      <div class="plate"><div class="name" style="font-size:${size < 90 ? 17 : 22}px">${esc(p.name)}</div><div class="badges">${badges}</div></div>`;
+  }
+
   function renderSeats(s) {
+    const n = s.config.seats;
     const players = s.players;
-    const n = players.length;
-    $('empty').classList.toggle('hidden', n > 0);
-    const size = n <= 6 ? 132 : n <= 8 ? 122 : n <= 10 ? 108 : n <= 12 ? 94 : n <= 16 ? 78 : 64;
+    $('empty').classList.toggle('hidden', players.length > 0);
+    const size = n <= 6 ? 132 : n <= 8 ? 122 : n <= 10 ? 108 : 94;
     // ellipse radii in px of the 1400x820 table area, centre (700,410)
     const rx = 600, ry = 326;
-    const key = players.map((p) => p.id).join(',') + '|' + size;
-    const layoutChanged = key !== lastLayoutKey;
-    lastLayoutKey = key;
     const pos = seatPositions(n, 1, 1);
+    const bySeat = new Map();
+    players.forEach((p) => { if (p.seat !== null && p.seat < n) bySeat.set(p.seat, p); });
     const container = $('seats');
     const alive = new Set();
-    players.forEach((p, i) => {
-      alive.add(p.id);
-      let el = seatEls.get(p.id);
+    for (let i = 0; i < n; i++) {
+      const p = bySeat.get(i);
+      const key = p ? p.id : 'empty-' + i;
+      alive.add(key);
+      let el = seatEls.get(key);
       if (!el) {
         el = document.createElement('div');
-        el.className = 'seat';
-        el.dataset.id = p.id;
+        el.dataset.id = key;
         container.appendChild(el);
-        seatEls.set(p.id, el);
+        seatEls.set(key, el);
       }
-      if (layoutChanged) {
-        el.style.left = 700 + (pos[i].x - 50) * rx + 'px';
-        el.style.top = 410 + (pos[i].y - 50) * ry + 'px';
-        el.style.width = Math.max(150, size + 60) + 'px';
+      el.style.left = 700 + (pos[i].x - 50) * rx + 'px';
+      el.style.top = 410 + (pos[i].y - 50) * ry + 'px';
+      el.style.width = size + 60 + 'px';
+      if (!p) {
+        el.className = 'seat empty';
+        if (el.dataset.sig !== 'empty' + size) {
+          el.dataset.sig = 'empty' + size;
+          el.innerHTML = `<div class="ring"><div class="avatar" style="width:${size}px;height:${size}px"></div></div><div class="plate"><div class="name">Seat ${i + 1}</div></div>`;
+        }
+        continue;
       }
       const isWinner = s.derived.winnerId === p.id;
-      const sig = [p.name, p.photo, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
+      el.classList.add('seat');
+      el.classList.remove('empty');
+      el.classList.toggle('out', p.status === 'out');
+      el.classList.toggle('winner', isWinner);
+      const sig = seatSig(p, isWinner, size);
       if (el.dataset.sig !== sig) {
         el.dataset.sig = sig;
-        el.classList.toggle('out', p.status === 'out');
-        el.classList.toggle('winner', isWinner);
-        const badges = (p.rebuys ? `<span class="badge r">R${p.rebuys > 1 ? '×' + p.rebuys : ''}</span>` : '')
-          + (p.addons ? `<span class="badge a">A${p.addons > 1 ? '×' + p.addons : ''}</span>` : '');
-        el.innerHTML = `
-          ${isWinner ? '<div class="crown">👑</div>' : ''}
-          <div class="ring">${avatarHTML(p, size)}</div>
-          ${p.status === 'out' ? `<div class="outtag" style="top:${size / 2 - 6}px">OUT · ${ordinal(p.place)}</div>` : ''}
-          <div class="plate"><div class="name" style="font-size:${size < 90 ? 17 : 22}px">${esc(p.name)}</div><div class="badges">${badges}</div></div>`;
+        el.innerHTML = seatInner(p, isWinner, size);
       }
-    });
+    }
     for (const [id, el] of seatEls) {
       if (!alive.has(id)) { el.remove(); seatEls.delete(id); }
     }
+    // waiting list (active players without a seat)
+    const waiting = players.filter((p) => p.seat === null && p.status === 'active');
+    $('waiting').classList.toggle('hidden', !waiting.length);
+    $('wl').innerHTML = waiting.map((p) => `<div class="wp">${avatarHTML(p, 52)}<span>${esc(p.name)}</span></div>`).join('');
   }
 
   let winnerShownFor = null;
