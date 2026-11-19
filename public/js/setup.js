@@ -11,6 +11,7 @@
   async function load() {
     const s = await fetch('/api/state').then((r) => r.json());
     cfg = s.config;
+    PT.useCurrency(cfg.currency);
     players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo }));
     progress = Object.fromEntries(s.players.map((p) => [p.id, p]));
     renderAll();
@@ -47,6 +48,7 @@
     if (!el.dataset || !el.dataset.k) return;
     let v = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? 0 : Number(el.value)) : el.value;
     setPath(cfg, el.dataset.k, v);
+    if (el.dataset.k === 'currency') { PT.useCurrency(v); renderPayouts(); }
     setDirty(true);
     applyShows();
     renderPreview();
@@ -424,6 +426,7 @@
     }).then((r) => r.json()).catch(() => ({ ok: false, error: 'Could not reach the server' }));
     if (!res.ok) return toast(res.error || 'Save failed', { error: true });
     cfg = res.state.config;
+    PT.useCurrency(cfg.currency);
     players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo }));
     progress = Object.fromEntries(res.state.players.map((p) => [p.id, p]));
     renderAll();

@@ -43,6 +43,27 @@
     warn: () => { tone(880, 0, 0.15, 'square', 0.06); tone(880, 0.25, 0.15, 'square', 0.06); },
     bust: () => { tone(330, 0, 0.3, 'sawtooth', 0.08); tone(220, 0.2, 0.5, 'sawtooth', 0.08); },
     good: () => { tone(523, 0, 0.2); tone(784, 0.12, 0.4); },
+    // cash register "ka-ching": drawer clunk + bell + a few coins
+    kaching: () => {
+      if (!audio) return;
+      const t0 = audio.currentTime;
+      const len = Math.floor(audio.sampleRate * 0.06);
+      const buf = audio.createBuffer(1, len, audio.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = audio.createBufferSource();
+      const bp = audio.createBiquadFilter();
+      const g = audio.createGain();
+      src.buffer = buf;
+      bp.type = 'bandpass';
+      bp.frequency.value = 1800;
+      g.gain.value = 0.5;
+      src.connect(bp).connect(g).connect(audio.destination);
+      src.start(t0);
+      tone(180, 0, 0.08, 'square', 0.08);
+      [2637, 3520, 5274, 7040].forEach((f, i) => tone(f, 0.09, 1.1 - i * 0.2, 'sine', 0.14 / (i + 1)));
+      for (let i = 0; i < 6; i++) tone(3800 + Math.random() * 3200, 0.16 + i * 0.045, 0.07, 'triangle', 0.035);
+    },
     win: () => { [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, i * 0.16, 0.4, 'triangle', 0.15)); },
   };
 
@@ -65,6 +86,10 @@
 
   /* ---------- live connection ---------- */
   let live = null;
+  // Christmas extras: snowfall + string lights
+  PT.snow(stage, 160);
+  $('lights').innerHTML = Array.from({ length: 44 }, (_, i) => `<i style="animation-delay:${(i % 7) * 0.35}s"></i>`).join('');
+
   live = PT.connect({
     onState: render,
     onEvent: handleEvent,
@@ -90,6 +115,8 @@
   function render(s) {
     const cfg = s.config;
     const d = s.derived;
+    PT.useCurrency(cfg.currency);
+    PT.applyTheme(cfg.theme);
     const cur = cfg.currency;
     document.title = cfg.name + ' · Live';
     const isBreak = d.level.type === 'break';
@@ -144,7 +171,7 @@
       + (p.addons ? `<span class="badge a">A${p.addons > 1 ? '×' + p.addons : ''}</span>` : '');
     return `
       ${isWinner ? '<div class="crown">👑</div>' : ''}
-      <div class="ring">${avatarHTML(p, size)}</div>
+      <div class="ring">${PT.HAT}${avatarHTML(p, size)}</div>
       ${p.status === 'out' ? `<div class="outtag" style="top:${size / 2 - 6}px">OUT · ${ordinal(p.place)}</div>` : ''}
       <div class="plate"><div class="name" style="font-size:${size < 90 ? 17 : 22}px">${esc(p.name)}</div><div class="badges">${badges}</div></div>`;
   }
@@ -154,7 +181,7 @@
     const players = s.players;
     $('empty').classList.toggle('hidden', players.length > 0);
     $('seats').classList.toggle('hidden', players.length === 0);
-    const size = n <= 6 ? 132 : n <= 8 ? 122 : n <= 10 ? 108 : 94;
+    const size = n <= 6 ? 156 : n <= 8 ? 144 : n <= 10 ? 130 : 112;
     // ellipse radii in px of the 1400x820 table area, centre (700,410)
     const area = document.querySelector('.table-area');
     const cx = area.offsetWidth / 2, cy = area.offsetHeight / 2;
@@ -183,7 +210,7 @@
         el.className = 'seat empty';
         if (el.dataset.sig !== 'empty' + size) {
           el.dataset.sig = 'empty' + size;
-          el.innerHTML = `<div class="ring"><div class="avatar" style="width:${size}px;height:${size}px"></div></div><div class="plate"><div class="name">Seat ${i + 1}</div></div>`;
+          el.innerHTML = `<div class="ring"><div class="avatar" style="width:${size}px;height:${size}px"></div></div>`;
         }
         continue;
       }
@@ -313,14 +340,14 @@
           <div class="sub">Finishes ${ordinal(e.place)}${e.prize ? ` · wins <b>${fmtMoney(e.prize, cur)}</b>` : ''}</div></div>`);
         break;
       case 'rebuy':
-        sounds.good();
+        sounds.kaching();
         pulseSeat(e.playerId, 'flash');
         spotlight(`<div class="spot good"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">${e.reentry ? 'RE-ENTRY' : 'REBUY'}</div><div class="nm">${esc(e.name)}</div>
           <div class="sub">${s ? '+' + fmtNum(s.config.rebuy.chips) + ' chips' : ''}</div></div>`, 2800);
         break;
       case 'addon':
-        sounds.good();
+        sounds.kaching();
         pulseSeat(e.playerId, 'flash');
         spotlight(`<div class="spot addon"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">ADD-ON</div><div class="nm">${esc(e.name)}</div>

@@ -156,9 +156,13 @@ test('end-to-end: settings → display → phone remote', { skip: !chromium, tim
     await t.test('display shows table, players, pool and chips', async () => {
       assert.equal(await display.locator('.seat:not(.empty)').count(), NAMES.length);
       assert.equal(await display.locator('.seat.empty').count(), 10 - NAMES.length, 'empty seats drawn');
+      assert.equal(await display.locator('.seat.empty .plate').count(), 0, 'no seat-number labels on the TV');
+      assert.equal(await display.locator('.felt-logo').count(), 0, 'no suit graphic on the felt');
+      const photo = await display.locator('.seat:not(.empty) .avatar').first().boundingBox();
+      assert.ok(photo.width >= 125, `profile photos are big (${photo.width}px)`);
       assert.ok(await display.locator('#waiting.hidden').count(), 'no waiting list when everyone is seated');
       assert.equal(await display.locator('.seat img').count(), NAMES.length, 'player photos shown');
-      assert.equal(await display.textContent('#pool'), '$340');
+      assert.equal(await display.textContent('#pool'), '340 kr.');
       assert.equal(await display.textContent('#blinds'), '100 / 200');
       assert.doesNotMatch(await display.textContent('.topbar'), /Tony’s Home Game/, 'no name top-left');
       assert.ok(await display.locator('#chips .chip-img').count() >= 1, 'uploaded chip image shown');
@@ -227,16 +231,16 @@ test('end-to-end: settings → display → phone remote', { skip: !chromium, tim
       await phone.tap('.r-seat[aria-label="Tony"]');
       await phone.waitForSelector('#sheet.show');
       await phone.tap('#a-addon');
-      await display.waitForFunction(() => /\$400/.test(document.getElementById('pool').textContent));
+      await display.waitForFunction(() => /400 kr\./.test(document.getElementById('pool').textContent));
       assert.equal(await display.textContent('.seat[data-id] .badge.a'), 'A');
       await phone.waitForTimeout(400);
       await phone.tap('#b-undo');
-      await display.waitForFunction(() => /\$380/.test(document.getElementById('pool').textContent));
+      await display.waitForFunction(() => /380 kr\./.test(document.getElementById('pool').textContent));
       // add it back for the screenshots
       await phone.tap('.r-seat[aria-label="Tony"]');
       await phone.waitForSelector('#sheet.show');
       await phone.tap('#a-addon');
-      await display.waitForFunction(() => /\$400/.test(document.getElementById('pool').textContent));
+      await display.waitForFunction(() => /400 kr\./.test(document.getElementById('pool').textContent));
     });
 
     await t.test('next level from phone updates display', async () => {
@@ -510,6 +514,79 @@ test('TV display fills any screen shape (no black bars, everything on screen)', 
         await page.close();
       });
     }
+  } finally {
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('Christmas theme, kr. formatting and ka-ching on rebuy', { skip: !chromium, timeout: 90000 }, async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-xmas-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const errors = [];
+  try {
+    const r = await fetch(base + '/api/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 500 }, players: ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars', 'Nina', 'Omar', 'Emma'].map((name) => ({ name })) }),
+    });
+    const st = (await r.json()).state;
+    assert.equal(st.config.currency, 'kr.', 'kr. is the default currency');
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    display.on('pageerror', (e) => errors.push(e.message));
+    // count sounds: wrap the oscillator factory once audio is enabled
+    await display.goto(base + '/display');
+    await display.waitForSelector('.seat');
+    await display.click('body');
+    await display.evaluate(() => {
+      window.__osc = 0;
+      const orig = AudioContext.prototype.createBufferSource;
+      AudioContext.prototype.createBufferSource = function () { window.__osc++; return orig.call(this); };
+    });
+
+    await t.test('theme visuals', async () => {
+      assert.ok(await display.evaluate(() => document.body.classList.contains('theme-christmas')));
+      assert.equal(await display.locator('.seat:not(.empty) .hat').count(), 8, 'Santa hats on every player');
+      assert.ok(await display.isVisible('.hat'));
+      assert.ok(await display.isVisible('#lights'));
+      assert.ok(await display.locator('#stage canvas.snow').count() === 1, 'snow canvas');
+    });
+
+    await t.test('kr. after the amount with Danish thousands separator', async () => {
+      assert.equal(await display.textContent('#pool'), '4.000 kr.');
+      assert.match(await display.textContent('#payouts'), /2\.000 kr\./);
+    });
+
+    await t.test('rebuy plays the ka-ching (noise burst)', async () => {
+      const id = st.players[0].id;
+      const { io } = require('socket.io-client');
+      const c = io(base, { transports: ['websocket'] });
+      await new Promise((res) => c.on('connect', res));
+      await c.timeout(2000).emitWithAck('action', { type: 'player.rebuy', playerId: id });
+      c.close();
+      await display.waitForFunction(() => window.__osc > 0);
+      await display.waitForSelector('#spotlight:not(.show)', { timeout: 10000 });
+      await display.waitForTimeout(600);
+      await display.screenshot({ path: path.join(SHOTS, 'display-christmas.png') });
+    });
+
+    await t.test('remote shows the theme too', async () => {
+      const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+      const phone = await ctx.newPage();
+      phone.on('pageerror', (e) => errors.push(e.message));
+      await phone.goto(base + '/remote');
+      await phone.waitForSelector('.r-seat .hat');
+      assert.ok(await phone.evaluate(() => document.body.classList.contains('theme-christmas')));
+      assert.match(await phone.textContent('#r-stats'), /4\.050 kr\./);
+      assert.equal(await phone.locator('.seatno:visible').count(), 0, 'no seat numbers outside arrange mode');
+      await phone.screenshot({ path: path.join(SHOTS, 'remote-christmas.png') });
+      await ctx.close();
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
   } finally {
     await browser.close();
     await app.stop();

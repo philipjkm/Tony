@@ -2,6 +2,7 @@
   const { esc, fmtNum, fmtShort, fmtMoney, fmtClock, ordinal, avatarHTML, seatPositions, blindsText, toast } = PT;
   const $ = (id) => document.getElementById(id);
   let selectedId = null;
+  PT.snow(document.getElementById('snow-host'), 70);
   let busy = false;
 
   const live = PT.connect({
@@ -95,6 +96,8 @@
   function render(s) {
     const cfg = s.config;
     const d = s.derived;
+    PT.useCurrency(cfg.currency);
+    PT.applyTheme(cfg.theme);
     const cur = cfg.currency;
     document.title = cfg.name + ' · Remote';
     const isBreak = d.level.type === 'break';
@@ -145,7 +148,7 @@
     const d = s.derived;
     const n = s.config.seats;
     const seats = $('r-seats');
-    const size = n <= 8 ? 54 : n <= 10 ? 48 : 42;
+    const size = n <= 8 ? 60 : n <= 10 ? 54 : 46;
     const pos = seatPositions(n, 39, 42);
     const bySeat = new Map();
     s.players.forEach((p) => { if (p.seat !== null && p.seat < n) bySeat.set(p.seat, p); });
@@ -155,13 +158,13 @@
       const style = `left:${pos[i].x}%;top:${pos[i].y}%`;
       if (!p) {
         html += `<button class="r-seat empty" data-drop="seat:${i}" style="${style}" aria-label="Empty seat ${i + 1}">
-          <div class="ring"><div class="avatar" style="width:${size}px;height:${size}px"></div></div><span class="nm">Seat ${i + 1}</span></button>`;
+          <div class="ring"><div class="avatar" style="width:${size}px;height:${size}px"></div></div><span class="nm seatno">Seat ${i + 1}</span></button>`;
         continue;
       }
       const win = d.winnerId === p.id;
       const rb = (p.rebuys ? `<span class="r">R${p.rebuys > 1 ? p.rebuys : ''}</span>` : '') + (p.addons ? `<span class="a">A</span>` : '');
       html += `<button class="r-seat ${p.status === 'out' ? 'out' : ''} ${win ? 'win' : ''}" data-id="${esc(p.id)}" data-drop="seat:${i}" style="${style}" aria-label="${esc(p.name)}">
-        <div class="ring">${avatarHTML(p, size)}</div>
+        <div class="ring">${PT.HAT}${avatarHTML(p, size)}</div>
         ${p.status === 'out' ? `<span class="ot" style="top:${size / 2}px">${ordinal(p.place)}</span>` : ''}
         ${rb ? `<span class="rb">${rb}</span>` : ''}
         <span class="nm">${esc(p.name)}</span></button>`;

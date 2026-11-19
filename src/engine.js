@@ -33,7 +33,8 @@ function defaultLevels() {
 function defaultConfig() {
   return {
     name: 'Friday Night Poker',
-    currency: '$',
+    currency: 'kr.',
+    theme: 'classic',
     buyIn: 50,
     entryFee: 0,
     startingStack: 10000,
@@ -80,6 +81,7 @@ function normalizeConfig(input) {
   return {
     name: String(c.name ?? d.name).slice(0, 80) || 'Tournament',
     currency: String(c.currency ?? d.currency).slice(0, 4),
+    theme: ['classic', 'christmas'].includes(c.theme) ? c.theme : 'classic',
     buyIn: nonNeg(c.buyIn, d.buyIn),
     entryFee: nonNeg(c.entryFee, 0),
     startingStack: nonNeg(c.startingStack, d.startingStack),

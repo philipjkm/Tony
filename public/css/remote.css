@@ -167,3 +167,19 @@ body.remote {
 .remote .toasts { top: calc(12px + env(safe-area-inset-top)); bottom: auto; }
 .remote .toast { animation-name: toastDown; }
 @keyframes toastDown { from { opacity: 0; transform: translateY(-10px); } }
+
+/* seat numbers only while arranging */
+.r-table-wrap:not(.arranging) .seatno { visibility: hidden; }
+.r-seat { width: 90px; }
+.r-seat .nm { max-width: 90px; }
+
+/* Christmas theme */
+#snow-host { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+#snow-host .snow { width: 100%; height: 100%; }
+.hat { display: none; }
+.theme-christmas .r-seat .ring { position: relative; background: conic-gradient(#e5173f, #f6c453, #18a058, #e5173f); }
+.theme-christmas .r-seat .hat { display: block; position: absolute; z-index: 2; width: 72%; left: -16%; top: -40%; transform: rotate(-22deg); filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.theme-christmas .r-seat.empty .hat { display: none; }
+.theme-christmas .r-rail { background: repeating-conic-gradient(#c8102e 0 4deg, #f4f4f4 4deg 8deg); }
+.theme-christmas.remote { background: radial-gradient(600px 400px at 50% 30%, rgba(200,16,46,.16), transparent 70%), radial-gradient(500px 400px at 80% 80%, rgba(22,120,60,.16), transparent 70%), #080b0a; }
+.theme-christmas .r-seat.empty .ring { background: transparent; box-shadow: none; }
