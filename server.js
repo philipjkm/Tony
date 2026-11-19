@@ -32,6 +32,11 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
     t = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
     t.config = engine.normalizeConfig(t.config);
     engine.fixSeats(t); // older saves have no seats yet
+    // one-time switch from the old $ default to kr. (a later deliberate choice of $ is kept)
+    if (!t.migratedCurrency) {
+      if (t.config.currency === '$') t.config.currency = 'kr.';
+      t.migratedCurrency = true;
+    }
     if (t.clock && t.clock.running) {
       // server was stopped while running: restore the time left at the last save, paused
       const elapsed = Math.max(0, (t.savedAt || t.clock.anchor) - t.clock.anchor);

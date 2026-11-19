@@ -593,3 +593,32 @@ test('Christmas theme, kr. formatting and ka-ching on rebuy', { skip: !chromium,
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('saved games from before switch from $ to kr. once', async () => {
+  const E = require('../src/engine');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-mig-'));
+  try {
+    // an old save: $ currency and no migration flag
+    const old = E.createTournament({ ...E.defaultConfig(), currency: '$' }, [{ name: 'Tony' }]);
+    delete old.migratedCurrency;
+    fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify(old));
+    let app = createApp({ dataDir, port: 0, log: () => {} });
+    let port = await app.start();
+    let s = await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();
+    assert.equal(s.config.currency, 'kr.');
+    assert.equal(s.players[0].name, 'Tony', 'players kept');
+    // the host now deliberately picks $ → must survive a restart
+    await fetch(`http://127.0.0.1:${port}/api/setup`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: { ...s.config, currency: '$' }, players: s.players }),
+    });
+    await app.stop();
+    app = createApp({ dataDir, port: 0, log: () => {} });
+    port = await app.start();
+    s = await (await fetch(`http://127.0.0.1:${port}/api/state`)).json();
+    assert.equal(s.config.currency, '$');
+    await app.stop();
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

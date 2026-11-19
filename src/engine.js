@@ -165,6 +165,7 @@ function createTournament(config, players, now = Date.now()) {
     startedAt: null,
     log: [],
     seq: 0,
+    migratedCurrency: true,
   };
   fixSeats(t);
   return t;
