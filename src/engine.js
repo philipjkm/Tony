@@ -8,7 +8,6 @@ const crypto = require('crypto');
 const uid = () => crypto.randomBytes(5).toString('hex');
 const MIN = 60 * 1000;
 const MAX_SEATS = 12;
-const clone = (o) => JSON.parse(JSON.stringify(o));
 const num = (v, d = 0) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : d;
@@ -238,9 +237,10 @@ function settle(t, now) {
     events.push({ type: 'level', levelIndex: c.levelIndex });
   }
   if (rem <= 0) {
-    rem = 0;
-    c.running = false;
-    events.push({ type: 'clockEnded' });
+    // past the end of the structure: the final level simply keeps going (blinds stay)
+    const last = levelMs(levels[c.levelIndex]);
+    rem = ((rem % last) + last) % last || last;
+    events.push({ type: 'finalLevelRepeats' });
   }
   c.remainingMs = rem;
   c.anchor = now;
@@ -286,7 +286,9 @@ function derive(t, now = Date.now()) {
     prizePool = cfg.buyIn * entries + cfg.rebuy.price * rebuys + cfg.addon.price * addons + cfg.prizePool.added;
     prizePool = Math.max(prizePool, cfg.prizePool.guarantee);
   }
-  const payouts = computePayouts(cfg.payouts, prizePool);
+  // never pay more places than there are players (e.g. 3 paid places but only 2 entrants)
+  const paidPlaces = cfg.payouts.mode === 'percent' ? cfg.payouts.places.slice(0, Math.max(1, entries)) : cfg.payouts.places;
+  const payouts = computePayouts({ ...cfg.payouts, places: paidPlaces }, prizePool);
 
   const totalChips = cfg.startingStack * entries + cfg.rebuy.chips * rebuys + cfg.addon.chips * addons;
   const finished = entries > 1 && active.length === 1 && out.length > 0;
@@ -399,7 +401,8 @@ function apply(t, action, now = Date.now()) {
     if (!p) throw new ActionError('Player not found');
     return p;
   };
-  const snapshot = () => ({ players: clone(t.players), running: c.running });
+  // undo only needs the game state of the player(s) an action touches
+  const snapshot = (...ps) => ({ players: ps.filter(Boolean).map((p) => ({ id: p.id, status: p.status, rebuys: p.rebuys, addons: p.addons, eliminatedAt: p.eliminatedAt, seat: p.seat })) });
 
   switch (type) {
     case 'clock.start':
@@ -448,7 +451,7 @@ function apply(t, action, now = Date.now()) {
       const d = derive(t, now);
       const err = canEliminate(t, p, d);
       if (err) throw new ActionError(err);
-      const before = snapshot();
+      const before = snapshot(p);
       const place = d.activeCount;
       p.status = 'out';
       p.eliminatedAt = now;
@@ -469,7 +472,7 @@ function apply(t, action, now = Date.now()) {
       const d = derive(t, now);
       const err = canRebuy(t, p, d);
       if (err) throw new ActionError(err);
-      const before = snapshot();
+      const before = snapshot(p);
       const reentry = p.status === 'out';
       p.rebuys += 1;
       p.status = 'active';
@@ -483,7 +486,7 @@ function apply(t, action, now = Date.now()) {
       const d = derive(t, now);
       const err = canAddon(t, p, d);
       if (err) throw new ActionError(err);
-      const before = snapshot();
+      const before = snapshot(p);
       p.addons += 1;
       pushLog(t, { id: uid(), ts: now, type: 'addon', playerId: p.id, name: p.name, before });
       events.push({ type: 'addon', playerId: p.id, name: p.name, photo: p.photo });
@@ -494,8 +497,8 @@ function apply(t, action, now = Date.now()) {
       const target = action.seat === null || action.seat === undefined ? null : Math.floor(num(action.seat, -1));
       if (target !== null && (target < 0 || target >= t.config.seats)) throw new ActionError('No such seat');
       if (target === p.seat) break;
-      const before = snapshot();
       const occupant = target === null ? null : t.players.find((x) => x.seat === target);
+      const before = snapshot(p, occupant);
       if (occupant) occupant.seat = p.seat; // swap (may send them to the waiting list)
       p.seat = target;
       pushLog(t, { id: uid(), ts: now, type: 'seat', playerId: p.id, name: p.name, seat: target, before });
@@ -505,7 +508,19 @@ function apply(t, action, now = Date.now()) {
     case 'undo': {
       const last = t.log.pop();
       if (!last) throw new ActionError('Nothing to undo');
-      t.players = last.before.players;
+      // restore game state only for players that still exist; settings changes made since
+      // (renamed/removed/added players, fewer seats) are kept
+      const prev = new Map(last.before.players.map((p) => [p.id, p]));
+      for (const p of t.players) {
+        const b = prev.get(p.id);
+        if (!b) continue;
+        p.status = b.status;
+        p.rebuys = b.rebuys;
+        p.addons = b.addons;
+        p.eliminatedAt = b.eliminatedAt;
+        p.seat = b.seat;
+      }
+      fixSeats(t);
       events.push({ type: 'undo', what: last.type, name: last.name });
       break;
     }

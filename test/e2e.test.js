@@ -667,3 +667,28 @@ test('saved games from before switch from $ to kr. once', async () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('a refused action right at a level change still updates every screen', async () => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-race-'));
+  let fake = 1_700_000_000_000;
+  // tick very slowly so only the action can notice the level change
+  const app = createApp({ dataDir, port: 0, tickMs: 60_000, log: () => {}, now: () => fake });
+  const port = await app.start();
+  const c = io(`http://127.0.0.1:${port}`, { transports: ['websocket'] });
+  try {
+    const states = [];
+    c.on('state', (s) => states.push(s));
+    await new Promise((r) => c.on('connect', r));
+    await c.emitWithAck('action', { type: 'clock.start' });
+    fake += 15 * 60_000 + 1000; // level 1 is over
+    const res = await c.emitWithAck('action', { type: 'player.eliminate', playerId: 'nobody' });
+    assert.equal(res.ok, false);
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(states[states.length - 1].derived.levelNumber, 2, 'screens were told about level 2');
+  } finally {
+    c.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

@@ -115,6 +115,7 @@
   function render(s) {
     const cfg = s.config;
     const d = s.derived;
+    document.body.dataset.seq = s.seq; // lets tests see which update the screen is showing
     PT.useCurrency(cfg.currency);
     PT.applyTheme(cfg.theme);
     const cur = cfg.currency;
@@ -163,7 +164,8 @@
     const chips = [...cfg.chips].sort((a, b) => a.value - b.value);
     $('chips').innerHTML = chips.map((ch) => `<div class="chipv">${chipHTML(ch, 72)}<span class="val tnum">${fmtShort(ch.value)}</span></div>`).join('');
 
-    $('qr-card').classList.toggle('hidden', !!s.startedAt || $('qr').dataset.failed === '1');
+    const live_ = !!s.startedAt || d.running || d.finished || s.log.length > 0;
+    $('qr-card').classList.toggle('hidden', live_ || $('qr').dataset.failed === '1');
     renderSeats(s);
     renderWinner(s);
     tickClock();

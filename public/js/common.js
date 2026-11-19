@@ -92,6 +92,9 @@
       onState && onState(s);
     });
     socket.on('event', (e) => onEvent && onEvent(e));
+    // phones/tablets pause timers while asleep: get a fresh state when we come back, and now and then
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && socket.connected) socket.emit('sync'); });
+    setInterval(() => { if (socket.connected) socket.emit('sync'); }, 30000);
     const remaining = () => {
       if (!state) return 0;
       const d = state.derived;

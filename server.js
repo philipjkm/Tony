@@ -21,7 +21,12 @@ function lanAddresses() {
   return out.sort((a, b) => Number(!/^(192\.168|10\.)/.test(a)) - Number(!/^(192\.168|10\.)/.test(b)));
 }
 
-function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs = 250, log = console.log } = {}) {
+// Monotonic clock: immune to the Mac's wall clock being adjusted (time sync) mid-game.
+const WALL0 = Date.now();
+const PERF0 = performance.now();
+const monotonicNow = () => WALL0 + (performance.now() - PERF0);
+
+function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs = 250, log = console.log, now = monotonicNow } = {}) {
   const uploadsDir = path.join(dataDir, 'uploads');
   fs.mkdirSync(uploadsDir, { recursive: true });
   const stateFile = path.join(dataDir, 'state.json');
@@ -42,7 +47,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       const elapsed = Math.max(0, (t.savedAt || t.clock.anchor) - t.clock.anchor);
       t.clock.remainingMs = Math.max(1000, t.clock.remainingMs - elapsed);
       t.clock.running = false;
-      t.clock.anchor = Date.now();
+      t.clock.anchor = now();
     }
   } catch {
     t = engine.createTournament(engine.defaultConfig(), []);
@@ -51,9 +56,14 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
   const saveNow = () => {
     clearTimeout(saveTimer);
     saveTimer = null;
-    const tmp = stateFile + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify({ ...t, savedAt: Date.now() }));
-    fs.renameSync(tmp, stateFile);
+    try {
+      const tmp = stateFile + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify({ ...t, savedAt: now() }));
+      fs.renameSync(tmp, stateFile);
+    } catch (e) {
+      // e.g. disk full: keep the game running, try again on the next change
+      log('could not save state:', e.message);
+    }
   };
   const save = () => {
     if (!saveTimer) saveTimer = setTimeout(saveNow, 300);
@@ -70,13 +80,13 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
   app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
   const broadcast = (events = []) => {
-    const state = engine.publicState(t, Date.now());
+    const state = engine.publicState(t, now());
     io.emit('state', state);
     for (const e of events) io.emit('event', e);
     save();
   };
 
-  app.get('/api/state', (req, res) => res.json(engine.publicState(t, Date.now())));
+  app.get('/api/state', (req, res) => res.json(engine.publicState(t, now())));
 
   app.get('/api/info', (req, res) => {
     const actualPort = server.address() ? server.address().port : port;
@@ -100,12 +110,14 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
 
   app.post('/api/setup', (req, res) => {
     const { config, players, reset } = req.body || {};
+    const pending = engine.tick(t, now());
+    if (pending.length) broadcast(pending);
     try {
-      if (reset) t = engine.createTournament(config, players, Date.now());
-      else engine.updateSetup(t, config, players, Date.now());
+      if (reset) t = engine.createTournament(config, players, now());
+      else engine.updateSetup(t, config, players, now());
       broadcast([{ type: reset ? 'reset' : 'setup' }]);
       saveNow();
-      res.json({ ok: true, state: engine.publicState(t, Date.now()) });
+      res.json({ ok: true, state: engine.publicState(t, now()) });
     } catch (e) {
       res.status(400).json({ ok: false, error: e.message });
     }
@@ -132,11 +144,17 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
 
   /* ---------- realtime ---------- */
   io.on('connection', (socket) => {
-    socket.emit('state', engine.publicState(t, Date.now()));
+    socket.emit('state', engine.publicState(t, now()));
+    // clients ask for a fresh copy after waking up (phones pause their timers while asleep)
+    socket.on('sync', () => socket.emit('state', engine.publicState(t, now())));
     socket.on('action', (action, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
+      // bring the clock up to date and announce any level change first, so a refused
+      // action right at a level boundary can never leave the screens behind
+      const pending = engine.tick(t, now());
+      if (pending.length) broadcast(pending);
       try {
-        const { events } = engine.apply(t, action, Date.now());
+        const { events } = engine.apply(t, action, now());
         broadcast(events);
         reply({ ok: true });
       } catch (e) {
@@ -147,7 +165,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
   });
 
   const timer = setInterval(() => {
-    const events = engine.tick(t, Date.now());
+    const events = engine.tick(t, now());
     if (events.length) broadcast(events);
   }, tickMs);
   // keep the saved clock fresh while running (crash / restart safety)
@@ -165,6 +183,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       if (saveTimer) saveNow();
       io.close();
       server.close(() => resolve());
+      server.closeAllConnections(); // don't wait for idle keep-alive connections
     }),
   };
 }

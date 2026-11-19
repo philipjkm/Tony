@@ -61,14 +61,14 @@ test('clock auto-advances levels including breaks, carrying over time', () => {
   assert.equal(d.level.type, 'break');
   assert.equal(d.remainingMs, 2 * MIN - 1000);
   assert.equal(d.levelNumber, 1, 'break counts as the previous level number');
-  // skip far past everything: should land on last level and stop at 0
-  ev = E.tick(t, T0 + 10 * MIN);
-  d = E.derive(t, T0 + 10 * MIN);
+  // skip far past everything: lands on the last level, which keeps repeating (play goes on)
+  ev = E.tick(t, T0 + 10 * MIN + 15_000);
+  d = E.derive(t, T0 + 10 * MIN + 15_000);
   assert.equal(d.levelIndex, 2);
   assert.equal(d.levelNumber, 2);
-  assert.equal(d.remainingMs, 0);
-  assert.equal(d.running, false);
-  assert.ok(ev.some((e) => e.type === 'clockEnded'));
+  assert.equal(d.remainingMs, 45_000);
+  assert.equal(d.running, true, 'clock keeps running on the final level');
+  assert.ok(ev.some((e) => e.type === 'finalLevelRepeats'));
 });
 
 test('next/prev/adjust/reset level', () => {
@@ -283,4 +283,27 @@ test('seats: shrinking the table moves extra players to waiting; new players fil
   E.updateSetup(t, { ...cfg, seats: 4 }, [...t.players, { name: 'Later' }], T0);
   assert.equal(t.players.find((p) => p.name === 'Later').seat, 3, 'new player takes the free seat');
   assert.equal(t.players[3].seat, null, 'existing waiting players stay waiting (host decides)');
+});
+
+test('payouts never cover more places than there are players', () => {
+  const t = make(2, { buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] } });
+  const d = E.derive(t, T0);
+  assert.equal(d.payouts.length, 2);
+  assert.equal(d.payouts.reduce((s, p) => s + p.amount, 0), 200, 'whole pool still paid out');
+});
+
+test('undo after a settings change keeps the settings (seats, removed and late players)', () => {
+  const t = make(4, { seats: 6 });
+  E.apply(t, { type: 'player.seat', playerId: 'p1', seat: 5 }, T0);
+  E.apply(t, { type: 'player.eliminate', playerId: 'p2' }, T0);
+  E.updateSetup(t, { ...t.config, seats: 4 }, [
+    ...t.players.filter((p) => p.id !== 'p3').map((p) => ({ id: p.id, name: p.name })),
+    { name: 'Late' },
+  ], T0);
+  E.apply(t, { type: 'undo' }, T0); // undoes the elimination of p2
+  assert.equal(P(t, 'p2').status, 'active');
+  assert.ok(!P(t, 'p3'), 'removed player stays removed');
+  assert.ok(t.players.some((p) => p.name === 'Late'), 'late player stays');
+  E.apply(t, { type: 'undo' }, T0); // undoes p1 → seat 5, which no longer exists
+  assert.ok(t.players.every((p) => p.seat === null || p.seat < 4), 'no one in a seat that no longer exists');
 });

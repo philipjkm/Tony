@@ -95,7 +95,15 @@ Everything is saved (state + uploaded images) to `~/Poker Tournament Data` when 
 npm test             # everything
 npm run test:unit    # engine logic (20 tests)
 npm run test:e2e     # real browser: settings → TV → phone (needs Playwright)
+npm run test:soak    # full 4-hour game, time-compressed (~3 min, needs Playwright)
 ```
+**Stress tests.** `test/stress.test.js` plays 300 simulated 4-hour tournaments with random, messy host actions: double taps, undo, seat shuffles, settings changes and server restarts. It checks money, places, seats and the clock after every step. `test/soak.qa.js` runs a full 4-hour game through the real server, TV and two phones at 80× speed. During that game it:
+- cuts a phone's Wi-Fi, restarts the server and refreshes the TV
+- sends bursts of simultaneous taps, including two phones eliminating the same player
+- changes settings mid-game
+
+Throughout, it checks the screens always match the server and that memory stays flat.
+
 The end-to-end suite drives Settings, the TV display (1920×1080) and an iPhone-sized remote together in Chromium. It checks:
 - uploads, blind generation, payouts and saving
 - clock start, pause and level changes from the phone
