@@ -168,7 +168,7 @@ module.exports = { createApp, lanAddresses };
 
 if (require.main === module) {
   const port = Number(process.env.PORT) || 3000;
-  const inst = createApp({ port });
+  const inst = createApp({ port, ...(process.env.DATA_DIR ? { dataDir: process.env.DATA_DIR } : {}) });
   inst.start().then((p) => {
     const urls = lanAddresses().map((ip) => `http://${ip}:${p}`);
     const lan = urls[0] || `http://localhost:${p}`;

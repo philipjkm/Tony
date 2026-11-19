@@ -8,17 +8,28 @@ A sleek, dark-themed home poker tournament app. The **TV display** shows a live 
 |---|---|---|
 | <img src="docs/screenshots/remote.png" width="250"> | <img src="docs/screenshots/remote-sheet.png" width="250"> | <img src="docs/screenshots/remote-arrange.png" width="250"> |
 
-## Quick start (MacBook)
+## Quick start (MacBook), no Terminal needed
 
-You need [Node.js 18+](https://nodejs.org) (`brew install node`).
+1. Install **Node.js** (LTS) from [nodejs.org](https://nodejs.org). You only do this once.
+2. On this GitHub page, click the green **Code** button → **Download ZIP**, then double-click the ZIP to unzip it. Move the folder somewhere handy, like Documents.
+3. In the folder, double-click **`Start Poker.command`**.
+   - **The very first time**, macOS blocks it because it was downloaded. **Right-click** the file → **Open** → **Open**, and it remembers after that. On newer macOS versions, if there's no Open button: System Settings → Privacy & Security → scroll down → **Open Anyway**.
+   - On first start it installs what it needs (about a minute), then opens the app in your browser.
+4. Keep the Terminal window that appears open while you play. Closing it stops the app.
+
+The launcher also keeps the Mac from going to sleep during the game. Your players, photos and settings are saved in a folder called **Poker Tournament Data** in your home folder. That means you can download a newer version of the app later without losing anything.
+
+<details><summary>Prefer the Terminal?</summary>
 
 ```bash
-git clone <this repo> && cd Tony
+git clone https://github.com/philipjkm/Tony.git
+cd Tony
 npm install
 npm start
 ```
+</details>
 
-The terminal prints your links:
+When it's running:
 
 | Screen | URL | Where |
 |---|---|---|
@@ -66,7 +77,7 @@ Seat moves animate on the TV and can be undone. Tap **✓ Done** when finished.
 
 **Save changes** applies settings live without losing progress, so you can add a late player or tweak blinds mid-game. **Start new tournament** resets the clock and all eliminations, rebuys and add-ons, and keeps players and settings.
 
-Everything is saved to `data/` (state + uploaded images), so a restart or crash picks up where you left off, paused.
+Everything is saved (state + uploaded images) to `~/Poker Tournament Data` when started with the launcher, or `data/` with `npm start`. A restart or crash picks up where you left off, paused.
 
 ## How it works
 - `server.js`: Express + Socket.IO server. It owns the authoritative clock and state, persists to `data/state.json`, and handles image uploads and the QR code.
