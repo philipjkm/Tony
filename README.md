@@ -19,15 +19,21 @@ A sleek, dark-themed home poker tournament app. The **TV display** shows a live 
 
 The launcher also keeps the Mac from going to sleep during the game. Your players, photos and settings are saved in a folder called **Poker Tournament Data** in your home folder. That means you can download a newer version of the app later without losing anything.
 
-<details><summary>Prefer the Terminal?</summary>
+### Install from the Terminal (no browser downloads)
+Open **Terminal** (⌘ + Space, type `Terminal`, Enter) and paste **one** of these:
 
+**If the repo is public:**
 ```bash
-git clone https://github.com/philipjkm/Tony.git
-cd Tony
-npm install
-npm start
+curl -fsSL https://raw.githubusercontent.com/philipjkm/Tony/main/install.sh | bash
 ```
-</details>
+
+**If the repo is private** (you'll be asked for a GitHub token; typing is hidden):
+```bash
+printf "GitHub token: "; read -s T; echo; curl -fsSL -H "Authorization: Bearer $T" https://raw.githubusercontent.com/philipjkm/Tony/main/install.sh | GITHUB_TOKEN="$T" bash
+```
+To make a token: github.com → your picture → **Settings** → **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**. Under *Repository access*, pick **Only select repositories → Tony**. Under *Permissions → Contents*, choose **Read-only**. Copy the token.
+
+The installer puts the app in `~/Poker Tournament App` and adds **Start Poker** to your Desktop. It also adds a `poker-start` Terminal command. Run the same line again any time to update.
 
 When it's running:
 
