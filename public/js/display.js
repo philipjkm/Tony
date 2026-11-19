@@ -4,12 +4,19 @@
   const stage = $('stage');
 
   /* ---------- scale the 1920x1080 stage to any screen ---------- */
+  // The stage is designed at 1920x1080 but stretches to the screen's shape (no black bars):
+  // wider screens get a wider stage, taller screens (e.g. 16:10 MacBooks) a taller one.
   function fit() {
-    const s = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
-    stage.style.setProperty('--scale', s);
+    const W = window.innerWidth, H = window.innerHeight;
+    let sw = 1920, sh = 1080;
+    if (W / H > 1920 / 1080) sw = Math.round((1080 * W) / H);
+    else sh = Math.round((1920 * H) / W);
+    stage.style.width = sw + 'px';
+    stage.style.height = sh + 'px';
+    stage.style.setProperty('--scale', W / sw);
+    if (live && live.state) renderSeats(live.state);
   }
   window.addEventListener('resize', fit);
-  fit();
 
   /* ---------- sound (WebAudio, needs one click) ---------- */
   let audio = null;
@@ -57,7 +64,8 @@
   });
 
   /* ---------- live connection ---------- */
-  const live = PT.connect({
+  let live = null;
+  live = PT.connect({
     onState: render,
     onEvent: handleEvent,
     onConn: (on) => {
@@ -77,6 +85,7 @@
   /* ---------- render ---------- */
   const seatEls = new Map();
   let lastLayoutKey = '';
+  fit();
 
   function render(s) {
     const cfg = s.config;
@@ -144,9 +153,13 @@
     const n = s.config.seats;
     const players = s.players;
     $('empty').classList.toggle('hidden', players.length > 0);
+    $('seats').classList.toggle('hidden', players.length === 0);
     const size = n <= 6 ? 132 : n <= 8 ? 122 : n <= 10 ? 108 : 94;
     // ellipse radii in px of the 1400x820 table area, centre (700,410)
-    const rx = 600, ry = 326;
+    const area = document.querySelector('.table-area');
+    const cx = area.offsetWidth / 2, cy = area.offsetHeight / 2;
+    // spread seats a little on bigger areas, but keep them hugging the table
+    const rx = Math.min(640, Math.max(600, cx - 100)), ry = Math.min(360, Math.max(326, cy - 84));
     const pos = seatPositions(n, 1, 1);
     const bySeat = new Map();
     players.forEach((p) => { if (p.seat !== null && p.seat < n) bySeat.set(p.seat, p); });
@@ -163,8 +176,8 @@
         container.appendChild(el);
         seatEls.set(key, el);
       }
-      el.style.left = 700 + (pos[i].x - 50) * rx + 'px';
-      el.style.top = 410 + (pos[i].y - 50) * ry + 'px';
+      el.style.left = cx + (pos[i].x - 50) * rx + 'px';
+      el.style.top = cy + (pos[i].y - 50) * ry + 'px';
       el.style.width = size + 60 + 'px';
       if (!p) {
         el.className = 'seat empty';

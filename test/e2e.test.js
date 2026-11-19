@@ -473,3 +473,46 @@ test('seat arranging: waiting list, drag & drop, tap-to-move, undo, settings sho
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('TV display fills any screen shape (no black bars, everything on screen)', { skip: !chromium, timeout: 90000 }, async (t) => {
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-fit-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  try {
+    await fetch(base + '/api/setup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reset: true, config: { seats: 10 }, players: Array.from({ length: 10 }, (_, i) => ({ name: 'Player ' + (i + 1) })) }),
+    });
+    const screens = [[1920, 1080, '16:9 TV'], [1440, 900, '16:10 MacBook'], [2560, 1272, '2:1 wide'], [3440, 1440, '21:9 ultrawide'], [1024, 768, '4:3']];
+    for (const [w, h, label] of screens) {
+      await t.test(label, async () => {
+        const page = await browser.newPage({ viewport: { width: w, height: h } });
+        await page.goto(base + '/display');
+        await page.waitForSelector('.seat');
+        await page.waitForTimeout(700); // seat move animation
+        const r = await page.evaluate(() => {
+          const rect = (el) => el.getBoundingClientRect();
+          const st = rect(document.getElementById('stage'));
+          const seats = [...document.querySelectorAll('.seat')].map(rect);
+          const side = rect(document.querySelector('.side'));
+          const chip = rect(document.querySelector('.chipbar'));
+          return { st, seats, side, chip, W: innerWidth, H: innerHeight };
+        });
+        assert.ok(Math.abs(r.st.left) < 1 && Math.abs(r.st.top) < 1, `stage at 0,0 (${r.st.left},${r.st.top})`);
+        assert.ok(Math.abs(r.st.width - r.W) < 1 && Math.abs(r.st.height - r.H) < 1, `stage fills screen ${r.st.width}x${r.st.height} vs ${r.W}x${r.H}`);
+        for (const s of r.seats) {
+          assert.ok(s.left >= 0 && s.top >= 0 && s.bottom <= r.chip.top + 2, `seat on screen and above chip bar (${label})`);
+          assert.ok(s.right <= r.side.left + 2, `seat does not overlap side panel (${label})`);
+        }
+        if (label === '16:10 MacBook') await page.screenshot({ path: path.join(SHOTS, 'display-macbook.png') });
+        await page.close();
+      });
+    }
+  } finally {
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
