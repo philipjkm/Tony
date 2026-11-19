@@ -138,3 +138,13 @@ input[type=number] { font-variant-numeric: tabular-nums; }
   .s-top-links .btn { width: 44px; padding: 0; }
 }
 .setup .toasts { bottom: 96px; }
+
+/* hats in the player cards (Christmas theme) */
+.hat { display: none; }
+.pl-card .ph { position: relative; }
+.theme-christmas .pl-card .ph > .hat { display: block; position: absolute; z-index: 2; width: 62%; left: -10%; top: -32%; transform: rotate(-22deg); filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.theme-christmas .pl-card .ph > .hat.hat-beanie, .theme-christmas .pl-card .ph > .hat.hat-tophat,
+.theme-christmas .pl-card .ph > .hat.hat-crown, .theme-christmas .pl-card .ph > .hat.hat-tree { left: 18%; top: -36%; transform: rotate(-6deg); width: 64%; }
+.theme-christmas .pl-card .ph > .hat.hat-antlers { left: 3%; top: -46%; width: 94%; transform: none; }
+.pl-card .hat-pick { height: 34px; font-size: 13px; padding: 0 8px; }
+.pl-card { padding-top: 26px; }

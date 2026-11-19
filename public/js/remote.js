@@ -121,6 +121,8 @@
       : `<b>${d.activeCount}</b>players left`;
 
     renderTable(s);
+    $('r-final').classList.toggle('hidden', !d.finished);
+    if (d.finished) $('r-final-body').innerHTML = PT.resultsHTML(s, 28);
 
     if (s.undo) {
       $('r-undo').classList.remove('hidden');
@@ -164,7 +166,7 @@
       const win = d.winnerId === p.id;
       const rb = (p.rebuys ? `<span class="r">R${p.rebuys > 1 ? p.rebuys : ''}</span>` : '') + (p.addons ? `<span class="a">A</span>` : '');
       html += `<button class="r-seat ${p.status === 'out' ? 'out' : ''} ${win ? 'win' : ''}" data-id="${esc(p.id)}" data-drop="seat:${i}" style="${style}" aria-label="${esc(p.name)}">
-        <div class="ring">${PT.HAT}${avatarHTML(p, size)}</div>
+        <div class="ring">${PT.hatHTML(p)}${avatarHTML(p, size)}</div>
         ${p.status === 'out' ? `<span class="ot" style="top:${size / 2}px">${ordinal(p.place)}</span>` : ''}
         ${rb ? `<span class="rb">${rb}</span>` : ''}
         <span class="nm">${esc(p.name)}</span></button>`;

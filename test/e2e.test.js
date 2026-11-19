@@ -295,6 +295,21 @@ test('end-to-end: settings → display → phone remote', { skip: !chromium, tim
       await display.screenshot({ path: path.join(SHOTS, 'display-champion.png') });
     });
 
+    await t.test('payout summary after the tournament (TV + phone)', async () => {
+      await display.waitForSelector('#final:not(.hidden)', { timeout: 20000 });
+      assert.ok(await display.locator('#winner.hidden').count(), 'champion screen gives way to results');
+      assert.equal(await display.locator('#final tbody tr').count(), NAMES.length);
+      const first = await display.textContent('#final tbody tr:first-child');
+      assert.match(first, /Tony[\s\S]*180 kr\./, 'winner first with prize');
+      // totals: paid in = 8 buy-ins + 1 rebuy + 1 add-on; paid out = pool (400) since there is no entry fee
+      assert.match(await display.textContent('#final tfoot'), /380 kr\.[\s\S]*400 kr\./);
+      await display.screenshot({ path: path.join(SHOTS, 'display-results.png') });
+      await phone.waitForSelector('#r-final:not(.hidden)');
+      assert.equal(await phone.locator('#r-final tbody tr').count(), NAMES.length);
+      const over = await phone.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+      assert.ok(over <= 0, `results table fits on the phone (${over}px over)`);
+    });
+
     await t.test('pages have no JS errors', () => {
       assert.deepEqual(errors, []);
     });
@@ -553,6 +568,11 @@ test('Christmas theme, kr. formatting and ka-ching on rebuy', { skip: !chromium,
       assert.ok(await display.isVisible('.hat'));
       assert.ok(await display.isVisible('#lights'));
       assert.ok(await display.locator('#stage canvas.snow').count() === 1, 'snow canvas');
+      const kinds = await display.locator('.seat .hat').evaluateAll((els) => new Set(els.map((e) => e.getAttribute('class'))).size);
+      assert.ok(kinds >= 3, `players get different hats (${kinds} kinds)`);
+      assert.ok(await display.isVisible('.pool-bow'), 'gift-wrapped prize pool');
+      const fs1 = await display.locator('#pool').evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+      assert.ok(fs1 >= 90, `prize pool is big (${fs1}px)`);
     });
 
     await t.test('kr. after the amount with Danish thousands separator', async () => {
@@ -570,6 +590,31 @@ test('Christmas theme, kr. formatting and ka-ching on rebuy', { skip: !chromium,
       await display.waitForFunction(() => window.__osc > 0);
       await display.waitForSelector('#spotlight:not(.show)', { timeout: 10000 });
       await display.waitForTimeout(600);
+      await display.screenshot({ path: path.join(SHOTS, 'display-christmas.png') });
+    });
+
+    await t.test('custom hat per player from Settings', async () => {
+      const s0 = await (await fetch(base + '/api/state')).json();
+      const players = s0.players.map((p, i) => ({ id: p.id, name: p.name, photo: p.photo, hat: i === 0 ? 'antlers' : i === 1 ? 'none' : 'crown' }));
+      await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: s0.config, players }) });
+      await display.waitForFunction((id) => !!document.querySelector(`.seat[data-id="${id}"] .hat-antlers`), s0.players[0].id);
+      assert.equal(await display.locator(`.seat[data-id="${s0.players[1].id}"] .hat`).count(), 0, 'no hat');
+      assert.equal(await display.locator('.seat .hat-crown').count(), 6);
+      const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      await setup.goto(base + '/setup#players');
+      await setup.waitForSelector('.pl-card .hat-antlers');
+      assert.equal(await setup.inputValue('[data-pl-hat="0"]'), 'antlers');
+      await setup.selectOption('[data-pl-hat="2"]', 'elf');
+      await setup.waitForSelector('.pl-card[data-i="2"] .hat-elf');
+      await setup.click('#b-save');
+      await display.waitForFunction((id) => !!document.querySelector(`.seat[data-id="${id}"] .hat-elf`), s0.players[2].id);
+      await setup.screenshot({ path: path.join(SHOTS, 'settings-hats.png') });
+      await setup.close();
+      // mix them back up for the screenshot
+      const mix = ['santa', 'elf', 'antlers', 'beanie', 'tophat', 'tree', 'crown', 'auto'];
+      await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: s0.config, players: s0.players.map((p, i) => ({ ...p, hat: mix[i] })) }) });
+      await display.waitForSelector('.seat .hat-tophat');
+      await display.waitForTimeout(500);
       await display.screenshot({ path: path.join(SHOTS, 'display-christmas.png') });
     });
 

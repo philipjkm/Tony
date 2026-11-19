@@ -45,8 +45,23 @@
 
     <aside class="side">
       <div class="card pool">
+        <svg class="pool-snow" viewBox="0 0 450 44" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 0 H450 V16 Q440 24 430 18 Q420 40 408 20 Q392 28 376 16 Q364 34 350 18 Q330 26 312 15 Q300 44 286 19 Q268 27 250 14 Q236 30 220 17 Q204 38 190 18 Q170 26 152 14 Q140 32 126 18 Q108 28 92 15 Q80 42 66 19 Q50 27 34 15 Q22 30 10 18 Q4 22 0 20 Z" fill="#fff"/>
+        </svg>
+        <div class="pool-ribbon" aria-hidden="true"></div>
+        <svg class="pool-bow" viewBox="0 0 120 70" aria-hidden="true">
+          <path d="M60 36 Q 20 0 8 22 Q 0 44 60 36 Z M60 36 Q 100 0 112 22 Q 120 44 60 36 Z" fill="#f6c453" stroke="#b8862b" stroke-width="3"/>
+          <path d="M56 38 L40 68 L50 64 L56 70 Z M64 38 L80 68 L70 64 L64 70 Z" fill="#e0a92e"/>
+          <circle cx="60" cy="36" r="9" fill="#e0a92e" stroke="#b8862b" stroke-width="3"/>
+        </svg>
+        <svg class="pool-holly" viewBox="0 0 100 70" aria-hidden="true">
+          <path d="M50 40 Q 30 10 4 22 Q 14 26 10 34 Q 20 32 22 40 Q 30 36 34 44 Q 42 38 50 40 Z" fill="#1a9b4b" stroke="#0f6b32" stroke-width="2"/>
+          <path d="M50 40 Q 70 10 96 22 Q 86 26 90 34 Q 80 32 78 40 Q 70 36 66 44 Q 58 38 50 40 Z" fill="#1fb357" stroke="#0f6b32" stroke-width="2"/>
+          <circle cx="44" cy="44" r="8" fill="#e5173f"/><circle cx="57" cy="46" r="8" fill="#c8102e"/><circle cx="50" cy="34" r="8" fill="#ff3b4e"/>
+        </svg>
         <div class="k">PRIZE POOL</div>
-        <div class="v tnum" id="pool">$0</div>
+        <div class="v tnum" id="pool">0</div>
+        <div class="pool-sub" id="pool-sub"></div>
       </div>
       <div class="card payouts">
         <div class="k">PAYOUTS</div>
@@ -69,6 +84,7 @@
     <div class="banner" id="banner"></div>
     <div class="spotlight" id="spotlight"></div>
     <div class="winner hidden" id="winner"></div>
+    <div class="final hidden" id="final"></div>
     <div class="hint" id="hint">Click anywhere for fullscreen &amp; sound</div>
   </div>
 

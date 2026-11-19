@@ -183,3 +183,24 @@ body.remote {
 .theme-christmas .r-rail { background: repeating-conic-gradient(#c8102e 0 4deg, #f4f4f4 4deg 8deg); }
 .theme-christmas.remote { background: radial-gradient(600px 400px at 50% 30%, rgba(200,16,46,.16), transparent 70%), radial-gradient(500px 400px at 80% 80%, rgba(22,120,60,.16), transparent 70%), #080b0a; }
 .theme-christmas .r-seat.empty .ring { background: transparent; box-shadow: none; }
+
+.theme-christmas .r-seat .ring > .hat.hat-beanie, .theme-christmas .r-seat .ring > .hat.hat-tophat,
+.theme-christmas .r-seat .ring > .hat.hat-crown, .theme-christmas .r-seat .ring > .hat.hat-tree { left: 18%; top: -38%; transform: rotate(-6deg); width: 64%; }
+.theme-christmas .r-seat .ring > .hat.hat-antlers { left: 3%; top: -48%; width: 94%; transform: none; }
+
+/* payout summary on the phone */
+.r-final { position: relative; z-index: 2; margin: 14px 16px 0; padding: 14px 10px 8px; border-radius: 18px; background: linear-gradient(160deg, rgba(246,196,83,.14), rgba(18,23,34,.95)); border: 1px solid rgba(246,196,83,.4); }
+.r-final-h { font-size: 13px; font-weight: 900; letter-spacing: .14em; color: var(--gold); text-transform: uppercase; padding: 0 6px 8px; }
+.results { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.results th { font-size: 10px; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; text-align: right; padding: 0 4px 6px; }
+.results th:nth-child(1), .results th:nth-child(2) { text-align: left; }
+.results td { text-align: right; padding: 7px 4px; border-top: 1px solid var(--line); font-weight: 700; white-space: nowrap; }
+.results td.pl { text-align: left; width: 26px; }
+.results td.who { text-align: left; display: flex; align-items: center; gap: 6px; white-space: normal; }
+.results td.who span { overflow: hidden; text-overflow: ellipsis; max-width: 84px; }
+.results td.who small { display: block; font-size: 10px; color: var(--muted); font-weight: 600; }
+.results td.won { color: var(--gold); }
+.results .net.pos { color: #4fe39a; }
+.results .net.neg { color: #ff6b7f; }
+.results tfoot td { color: var(--muted); border-top: 2px solid var(--line-2); }
+.results tfoot small { font-size: 10px; }

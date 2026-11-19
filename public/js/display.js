@@ -136,7 +136,13 @@
     liveEl.classList.toggle('off', !d.running);
 
     // side panel
-    $('pool').textContent = fmtMoney(d.prizePool, cur);
+    const num = fmtMoney(d.prizePool, '');
+    const unit = `<span class="unit">${esc(cur)}</span>`;
+    $('pool').innerHTML = /^[a-z.]+$/i.test(cur) ? `${num} ${unit}` : unit + num;
+    fitText($('pool'), 128, 56);
+    $('pool-sub').textContent = `${d.entries} ${d.entries === 1 ? 'entry' : 'entries'}`
+      + (d.rebuys ? ` · ${d.rebuys} rebuy${d.rebuys > 1 ? 's' : ''}` : '')
+      + (d.addons ? ` · ${d.addons} add-on${d.addons > 1 ? 's' : ''}` : '');
     const placeName = {};
     s.players.forEach((p) => { if (p.place) placeName[p.place] = p.name; });
     const pays = d.payouts.slice(0, 9);
@@ -164,14 +170,14 @@
   }
 
   function seatSig(p, isWinner, size) {
-    return [p.name, p.photo, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
+    return [p.name, p.photo, p.hat, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
   }
   function seatInner(p, isWinner, size) {
     const badges = (p.rebuys ? `<span class="badge r">R${p.rebuys > 1 ? '×' + p.rebuys : ''}</span>` : '')
       + (p.addons ? `<span class="badge a">A${p.addons > 1 ? '×' + p.addons : ''}</span>` : '');
     return `
       ${isWinner ? '<div class="crown">👑</div>' : ''}
-      <div class="ring">${PT.HAT}${avatarHTML(p, size)}</div>
+      <div class="ring">${PT.hatHTML(p)}${avatarHTML(p, size)}</div>
       ${p.status === 'out' ? `<div class="outtag" style="top:${size / 2 - 6}px">OUT · ${ordinal(p.place)}</div>` : ''}
       <div class="plate"><div class="name" style="font-size:${size < 90 ? 17 : 22}px">${esc(p.name)}</div><div class="badges">${badges}</div></div>`;
   }
@@ -235,12 +241,47 @@
   }
 
   let winnerShownFor = null;
+  let resultsTimer = null;
+
+  function renderFinal(s) {
+    const cur = s.config.currency;
+    $('final').innerHTML = `<div class="final-box">
+      <div class="final-h"><div><div class="t">🏆 FINAL RESULTS</div><div class="nm">${esc(s.config.name)}</div></div>
+        <div class="pp"><div class="k">PRIZE POOL</div><div class="v">${fmtMoney(s.derived.prizePool, cur)}</div></div></div>
+      ${PT.resultsHTML(s, s.players.length > 10 ? 40 : 52)}</div>`;
+  }
+
+  /** Shrink an element's font until its content fits its width. */
+  function fitText(el, max, min) {
+    let size = max;
+    el.style.fontSize = size + 'px';
+    while (size > min && el.scrollWidth > el.clientWidth + 1) {
+      size -= 4;
+      el.style.fontSize = size + 'px';
+    }
+  }
   function renderWinner(s) {
     const d = s.derived;
     const box = $('winner');
-    if (!d.finished) { box.classList.add('hidden'); winnerShownFor = null; return; }
-    if (winnerShownFor === d.winnerId) return;
+    if (!d.finished) {
+      box.classList.add('hidden');
+      $('final').classList.add('hidden');
+      clearTimeout(resultsTimer);
+      winnerShownFor = null;
+      return;
+    }
+    if (winnerShownFor === d.winnerId) {
+      if (!$('final').classList.contains('hidden')) renderFinal(s);
+      return;
+    }
     winnerShownFor = d.winnerId;
+    // champion first, then the full payout summary stays on screen
+    clearTimeout(resultsTimer);
+    resultsTimer = setTimeout(() => {
+      box.classList.add('hidden');
+      renderFinal(live.state);
+      $('final').classList.remove('hidden');
+    }, 12000);
     // the champion screen takes over: drop any queued spotlights
     spotQueue.length = 0;
     $('spotlight').classList.remove('show');
@@ -317,6 +358,9 @@
     el.classList.remove(cls);
     void el.offsetWidth;
     el.classList.add(cls);
+    // drop the class afterwards so a later redraw of the seat doesn't replay it
+    clearTimeout(el['t_' + cls]);
+    el['t_' + cls] = setTimeout(() => el.classList.remove(cls), 1400);
   }
 
   function handleEvent(e) {

@@ -12,7 +12,8 @@
     const s = await fetch('/api/state').then((r) => r.json());
     cfg = s.config;
     PT.useCurrency(cfg.currency);
-    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo }));
+    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat }));
+    PT.applyTheme(cfg.theme);
     progress = Object.fromEntries(s.players.map((p) => [p.id, p]));
     renderAll();
     setDirty(false);
@@ -49,6 +50,7 @@
     let v = el.type === 'checkbox' ? el.checked : el.type === 'number' ? (el.value === '' ? 0 : Number(el.value)) : el.value;
     setPath(cfg, el.dataset.k, v);
     if (el.dataset.k === 'currency') { PT.useCurrency(v); renderPayouts(); }
+    if (el.dataset.k === 'theme') PT.applyTheme(v);
     setDirty(true);
     applyShows();
     renderPreview();
@@ -319,11 +321,23 @@
       const extra = pr && (pr.rebuys || pr.addons) ? ` · R${pr.rebuys} A${pr.addons}` : '';
       return `<div class="pl-card ${pr && pr.status === 'out' ? 'out' : ''}" data-i="${i}">
         <button class="x" data-rm-pl="${i}" title="Remove player">✕</button>
-        <button class="ph" data-photo="${i}" title="Upload photo">${avatarHTML(p, 86)}</button>
+        <button class="ph" data-photo="${i}" title="Upload photo">${PT.hatHTML(p)}${avatarHTML(p, 86)}</button>
         <input type="text" value="${esc(p.name)}" data-pl-name="${i}" maxlength="40">
+        <select class="hat-pick" data-pl-hat="${i}" aria-label="Hat for ${esc(p.name)}">${hatOptions(p.hat)}</select>
         <span class="st">${esc(st + seat + extra)}</span></div>`;
     }).join('');
   }
+  function hatOptions(cur) {
+    const opts = [['auto', '🎲 Hat: surprise me'], ...Object.entries(PT.HATS).map(([k, v]) => [k, v.label]), ['none', 'No hat']];
+    return opts.map(([k, l]) => `<option value="${k}" ${k === (cur || 'auto') ? 'selected' : ''}>${l}</option>`).join('');
+  }
+  $('pl-grid').addEventListener('change', (e) => {
+    const i = e.target.dataset.plHat;
+    if (i === undefined) return;
+    players[i].hat = e.target.value;
+    setDirty(true);
+    renderPlayers();
+  });
   $('pl-grid').addEventListener('input', (e) => {
     const i = e.target.dataset.plName;
     if (i === undefined) return;
@@ -427,7 +441,7 @@
     if (!res.ok) return toast(res.error || 'Save failed', { error: true });
     cfg = res.state.config;
     PT.useCurrency(cfg.currency);
-    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo }));
+    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat }));
     progress = Object.fromEntries(res.state.players.map((p) => [p.id, p]));
     renderAll();
     setDirty(false);

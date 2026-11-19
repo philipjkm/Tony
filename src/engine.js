@@ -117,6 +117,9 @@ function normalizeConfig(input) {
   };
 }
 
+const HATS = ['auto', 'none', 'santa', 'elf', 'beanie', 'antlers', 'tophat', 'tree', 'crown'];
+const cleanHat = (h) => (HATS.includes(h) ? h : 'auto');
+
 function safeUrl(u) {
   u = String(u || '');
   return /^\/uploads\/[\w.-]+$/.test(u) ? u : '';
@@ -127,6 +130,7 @@ function newPlayer(p) {
     id: String((p && p.id) || uid()),
     name: String((p && p.name) || 'Player').slice(0, 40),
     photo: safeUrl(p && p.photo),
+    hat: cleanHat(p && p.hat),
     status: 'active', // 'active' | 'out'
     rebuys: 0,
     addons: 0,
@@ -184,6 +188,7 @@ function updateSetup(t, config, players, now = Date.now()) {
       if (existing) {
         existing.name = String(p.name || existing.name).slice(0, 40);
         existing.photo = safeUrl(p.photo);
+        existing.hat = cleanHat(p.hat);
         return existing;
       }
       return newPlayer(p);
@@ -551,5 +556,6 @@ module.exports = {
   levelNumberAt,
   levelMs,
   MAX_SEATS,
+  HATS,
   fixSeats,
 };
