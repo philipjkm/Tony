@@ -78,6 +78,18 @@ For a realistic Santa instead of the robotic built-in voice:
 
 Each line is made once and saved in `~/Poker Tournament Data/tts`, so repeats are free. The key stays on your Mac in `voice.json` and is never sent to the TV or phones. If ElevenLabs can't be reached, the built-in voice takes over. A typical night uses about 5,000–10,000 characters; check your ElevenLabs plan's monthly allowance.
 
+### Living table (silent touches through the evening)
+These effects run on their own and make no sound:
+- **Santa's sleigh** glides across the sky every 12–18 minutes, or a shooting star in the Classic theme. **Northern lights** shimmer slowly behind the table.
+- **Prize pool:** counts up with a gold glint when money comes in.
+- **Level change:** a light sweep over the felt and the new blinds flip in.
+- **Last 30 seconds of a level:** a glowing ring around the table drains away.
+- **Seats:** they breathe softly, rebuys sparkle for a minute, and knocked-out players freeze under frost.
+- **Fun-facts ticker** in the bottom bar: time played, bust-outs to the money, next pay jump, next break, average stack in big blinds, most rebuys.
+- **Hourly milestones**, and during breaks a slow carousel of everyone still in.
+
+**Sound effects** (Settings → General): **Fewer** is the default and keeps only the level chime, ka-ching and the champion and in-the-money fanfares. **All** and **Off** are the other options.
+
 ### Seats & waiting list
 Set the number of seats (2–12) in **Settings → General**. Players beyond that go on the **waiting list**, which shows at the bottom of the TV and below the table on the phone.
 

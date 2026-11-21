@@ -38,6 +38,10 @@
     o.start(t0);
     o.stop(t0 + dur + 0.05);
   }
+  // Sound effects setting: 'fewer' keeps only the level chime, ka-ching and the champion / in-the-money fanfare
+  const FEWER = new Set(['level', 'kaching', 'win']);
+  let sfxMode = 'fewer';
+  const sfx = (name) => { if (sfxMode === 'all' || (sfxMode === 'fewer' && FEWER.has(name))) sounds[name](); };
   const sounds = {
     level: () => { tone(660, 0, 0.35); tone(880, 0.18, 0.35); tone(1320, 0.36, 0.6); },
     warn: () => { tone(880, 0, 0.15, 'square', 0.06); tone(880, 0.25, 0.15, 'square', 0.06); },
@@ -91,6 +95,7 @@
   let live = null;
   // Christmas extras: snowfall + string lights
   PT.snow(stage, 160);
+  PT.ambient.init(stage);
   $('lights').innerHTML = Array.from({ length: 44 }, (_, i) => `<i style="animation-delay:${(i % 7) * 0.35}s"></i>`).join('');
 
   live = PT.connect({
@@ -122,6 +127,7 @@
     PT.useCurrency(cfg.currency);
     PT.applyTheme(cfg.theme);
     PT.announcer.configure(cfg.announcer, s.voice);
+    sfxMode = cfg.sfx || 'fewer';
     const mo = $('moment');
     const moment = d.headsUp ? ['duel', '⚔ HEADS UP'] : d.bubble ? ['bubble', '🫧 BUBBLE'] : d.inTheMoney ? ['money', (cfg.theme === 'christmas' ? '🎁' : '🏆') + ' IN THE MONEY'] : null;
     mo.classList.toggle('hidden', !moment);
@@ -145,10 +151,12 @@
     liveEl.classList.toggle('off', !d.running);
 
     // side panel
-    const num = fmtMoney(d.prizePool, '');
+    const num = `<span class="num">${fmtMoney(d.prizePool, '')}</span>`;
     const unit = `<span class="unit">${esc(cur)}</span>`;
     $('pool').innerHTML = /^[a-z.]+$/i.test(cur) ? `${num} ${unit}` : unit + num;
-    fitText($('pool'), 128, 40);
+    fitText($('pool'), 128, 40); // size for the final amount, then count up to it
+    if (shownPool != null && d.prizePool > shownPool) countUp(shownPool, d.prizePool);
+    shownPool = d.prizePool;
     $('pool-sub').textContent = `${d.entries} ${d.entries === 1 ? 'entry' : 'entries'}`
       + (d.rebuys ? ` · ${d.rebuys} rebuy${d.rebuys > 1 ? 's' : ''}` : '')
       + (d.addons ? ` · ${d.addons} add-on${d.addons > 1 ? 's' : ''}` : '')
@@ -176,6 +184,7 @@
     const live_ = !!s.startedAt || d.running || d.finished || s.log.length > 0;
     $('qr-card').classList.toggle('hidden', live_ || $('qr').dataset.failed === '1');
     renderSeats(s);
+    PT.ambient.render(s);
     renderWinner(s);
     tickClock();
   }
@@ -263,6 +272,26 @@
       ${PT.resultsHTML(s, s.players.length > 10 ? 40 : 52)}</div>`;
   }
 
+  let shownPool = null;
+  let countRaf = 0;
+  function countUp(from, to) {
+    cancelAnimationFrame(countRaf);
+    const el = document.querySelector('#pool .num');
+    const card = document.querySelector('.card.pool');
+    card.classList.remove('glint');
+    void card.offsetWidth;
+    card.classList.add('glint');
+    const t0 = performance.now();
+    const dur = 1400;
+    const step = () => {
+      const k = Math.min(1, (performance.now() - t0) / dur);
+      const e = 1 - Math.pow(1 - k, 3);
+      el.textContent = fmtMoney(Math.round(from + (to - from) * e), '');
+      if (k < 1) countRaf = requestAnimationFrame(step);
+    };
+    step();
+  }
+
   /** Shrink an element's font until its content fits its width. */
   function fitText(el, max, min) {
     let size = max;
@@ -330,13 +359,14 @@
     t.textContent = fmtClock(rem);
     const warn = d.running && rem <= 60000 && d.level.type !== 'break';
     t.classList.toggle('warn', warn);
-    if (warn && !warned && rem > 55000) { sounds.warn(); PT.announcer.handle({ type: 'minute' }, s); }
+    if (warn && !warned && rem > 55000) { sfx('warn'); PT.announcer.handle({ type: 'minute' }, s); }
     warned = warn;
     $('progress').style.width = (100 * (1 - rem / d.levelDurationMs)).toFixed(2) + '%';
     const nb = document.getElementById('next-break');
     if (nb) nb.textContent = d.nextBreakMs == null ? (d.level.type === 'break' ? 'Now' : '–') : fmtClock(d.nextBreakMs - (d.remainingMs - rem));
     const now = new Date();
     $('wall').textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    PT.ambient.update(s, rem);
   }
   setInterval(tickClock, 200);
 
@@ -381,23 +411,24 @@
     el['t_' + cls] = setTimeout(() => el.classList.remove(cls), 1400);
   }
 
-  PT.announcer.onBeforeSpeak(() => sounds.jingle());
+  PT.announcer.onBeforeSpeak(() => sfx('jingle'));
 
   function handleEvent(e) {
     PT.announcer.handle(e, live.state);
+    PT.ambient.onEvent(e);
     const s = live.state;
     const cur = s ? s.config.currency : '$';
     switch (e.type) {
       case 'level': {
         const l = s && s.config.levels[e.levelIndex];
         if (!l) break;
-        sounds.level();
+        sfx('level');
         if (l.type === 'break') banner('BREAK TIME', `${l.label || 'Break'} · ${l.minutes} min`);
         else banner(`LEVEL ${PT.fmtNum(s.derived.levelNumber)}`, `Blinds ${blindsText(l)}${l.ante ? ' · Ante ' + fmtNum(l.ante) : ''}`);
         break;
       }
       case 'eliminated':
-        sounds.bust();
+        sfx('bust');
         pulseSeat(e.playerId, 'bust');
         if (s && s.derived.finished) break; // final bust → champion screen instead
         spotlight(`<div class="spot"><div class="ring">${avatarHTML(e, 260)}</div>
@@ -405,27 +436,27 @@
           <div class="sub">Finishes ${ordinal(e.place)}${e.prize ? ` · wins <b>${fmtMoney(e.prize, cur)}</b>` : ''}</div></div>`);
         break;
       case 'rebuy':
-        sounds.kaching();
+        sfx('kaching');
         pulseSeat(e.playerId, 'flash');
         spotlight(`<div class="spot good"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">${e.reentry ? 'RE-ENTRY' : 'REBUY'}</div><div class="nm">${esc(e.name)}</div>
           <div class="sub">${s ? '+' + fmtNum(s.config.rebuy.chips) + ' chips' : ''}</div></div>`, 2800);
         break;
       case 'addon':
-        sounds.kaching();
+        sfx('kaching');
         pulseSeat(e.playerId, 'flash');
         spotlight(`<div class="spot addon"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">ADD-ON</div><div class="nm">${esc(e.name)}</div>
           <div class="sub">${s ? '+' + fmtNum(s.config.addon.chips) + ' chips' : ''}</div></div>`, 2800);
         break;
       case 'bubble':
-        sounds.heartbeat();
+        sfx('heartbeat');
         spotlight(`<div class="spot bubble"><div class="big">🫧</div>
           <div class="tag">ON THE BUBBLE</div><div class="nm">One more out…</div>
           <div class="sub">…and everyone left is in the money</div></div>`, 5000);
         break;
       case 'inTheMoney': {
-        sounds.win();
+        sfx('win');
         let coins = '';
         for (let i = 0; i < 40; i++) coins += `<i class="coin" style="left:${Math.random() * 100}%;animation-duration:${2 + Math.random() * 2.5}s;animation-delay:${-Math.random() * 3}s">🪙</i>`;
         const icon = s && s.config.theme === 'christmas' ? '🎁' : '🏆';
@@ -435,7 +466,7 @@
         break;
       }
       case 'headsUp':
-        sounds.heartbeat();
+        sfx('heartbeat');
         spotlight(`<div class="spot duel"><div class="vs">
             <div><div class="ring">${avatarHTML(e.a, 230)}</div><div class="nm2">${esc(e.a.name)}</div></div>
             <div class="vs-x">VS</div>
@@ -443,7 +474,7 @@
           <div class="tag">HEADS UP</div></div>`, 5000);
         break;
       case 'winner':
-        sounds.win();
+        sfx('win');
         break;
       case 'paused':
         banner('CLOCK', 'Paused', 2500);

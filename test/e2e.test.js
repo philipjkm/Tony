@@ -1174,3 +1174,120 @@ test('everyone except Philip adds 300 to the prize pool — pool, payouts and fi
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('living table: sleigh, milestones, countdown ring, count-up, sparkles, frost, ticker, break carousel, fewer sounds', { skip: !chromium, timeout: 150000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-live-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  const post = (body) => fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+  const names = ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars', 'Nina'];
+  try {
+    const r = await post({ reset: true, config: { theme: 'christmas', buyIn: 100, levels: [{ type: 'level', sb: 25, bb: 50, ante: 0, minutes: 90 }, { type: 'level', sb: 50, bb: 100, ante: 0, minutes: 20 }, { type: 'break', minutes: 10, label: 'Break' }] }, players: names.map((name) => ({ name })) });
+    const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+    const act = (a) => c.emitWithAck('action', a);
+
+    await t.test('time-lapse: sleigh flies on its own, hourly milestone, last-30-seconds ring', async () => {
+      const tv = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+      tv.on('pageerror', (e) => errors.push(e.message));
+      // run this TV's clock 200× faster
+      await tv.addInitScript(() => { const o = performance.now.bind(performance); const p0 = o(); performance.now = () => p0 + (o() - p0) * 200; });
+      await tv.goto(base + '/display');
+      await tv.waitForSelector('.seat');
+      await act({ type: 'clock.start' });
+      await tv.waitForSelector('.sleigh.fly', { timeout: 15000 }); // ~3 minutes of play in
+      await tv.waitForTimeout(5500);
+      const box = await tv.locator('.sleigh').boundingBox();
+      assert.ok(box.x > -600 && box.x < 1900, `sleigh is crossing the screen (x=${Math.round(box.x)})`);
+      await tv.screenshot({ path: path.join(SHOTS, 'display-sleigh.png') });
+      await tv.waitForFunction(() => /1 HOUR PLAYED/.test(document.getElementById('banner').textContent) && document.getElementById('banner').classList.contains('show'), null, { timeout: 30000 });
+      await tv.close();
+      await act({ type: 'clock.pause' });
+    });
+
+    const tv = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    tv.on('pageerror', (e) => errors.push(e.message));
+    await tv.goto(base + '/display');
+    await tv.waitForSelector('.seat');
+    await tv.click('body');
+    await tv.evaluate(() => { window.__osc = 0; const o = AudioContext.prototype.createOscillator; AudioContext.prototype.createOscillator = function () { window.__osc++; return o.call(this); }; });
+    const osc = () => tv.evaluate(() => window.__osc);
+    await act({ type: 'clock.start' });
+
+    await t.test('prize pool counts up with a glint; rebuy sparkles (and plays ka-ching)', async () => {
+      const o0 = await osc();
+      await act({ type: 'player.rebuy', playerId: ids.Tony });
+      await tv.waitForSelector('.card.pool.glint');
+      const mid = await tv.evaluate(() => new Promise((res) => setTimeout(() => res(document.querySelector('#pool .num').textContent), 250)));
+      assert.ok(Number(mid.replace(/\./g, '')) < 650, `counting up (${mid})`);
+      await tv.waitForFunction(() => document.getElementById('pool').textContent === '650 kr.');
+      assert.ok(await tv.locator(`.seat.sparkle[data-id="${ids.Tony}"]`).count());
+      assert.ok((await osc()) > o0, 'ka-ching still plays');
+    });
+
+    await t.test('"Fewer" sound effects: no bust sound; "All" brings it back', async () => {
+      let o0 = await osc();
+      await act({ type: 'player.eliminate', playerId: ids.Nina });
+      await tv.waitForSelector('#spotlight.show');
+      await tv.waitForTimeout(400);
+      assert.equal(await osc(), o0, 'silent bust-out');
+      const s = await (await fetch(base + '/api/state')).json();
+      await post({ config: { ...s.config, sfx: 'all' }, players: s.players });
+      await tv.waitForTimeout(300);
+      o0 = await osc();
+      await act({ type: 'player.eliminate', playerId: ids.Lars });
+      await tv.waitForFunction((n) => window.__osc > n, o0);
+      await post({ config: { ...s.config, sfx: 'fewer' }, players: s.players });
+    });
+
+    await t.test('knocked-out players are frozen under frost; ticker shows facts', async () => {
+      const frost = await tv.locator(`.seat[data-id="${ids.Nina}"] .avatar`).evaluate((el) => getComputedStyle(el, '::after').backgroundImage);
+      assert.match(frost, /gradient/);
+      await tv.waitForSelector('.ticker.in:not(.hidden)', { timeout: 15000 });
+      assert.match(await tv.textContent('.ticker'), /played|still in|money|Break|stack|blinds|rebuys|add-ons/);
+      assert.match(await tv.textContent('.ticker'), /^(?!.*6 of 6)/, 'ticker is up to date');
+      await tv.waitForFunction(() => document.getElementById('spotlight').dataset.busy === '0', null, { timeout: 30000 });
+      await tv.waitForTimeout(800);
+      await tv.screenshot({ path: path.join(SHOTS, 'display-living.png') });
+    });
+
+    await t.test('last 30 seconds of a level: glowing ring drains around the table', async () => {
+      const st = await (await fetch(base + '/api/state')).json();
+      await act({ type: 'clock.adjust', ms: -(st.derived.remainingMs - 25000) });
+      await tv.waitForSelector('.rail-ring.on');
+      const a1 = await tv.locator('.rail-ring rect').evaluate((r) => parseFloat(r.style.strokeDasharray));
+      await tv.waitForTimeout(1500);
+      const a2 = await tv.locator('.rail-ring rect').evaluate((r) => parseFloat(r.style.strokeDasharray));
+      assert.ok(a1 > 70 && a1 <= 84 && a2 < a1, `ring drains (${a1.toFixed(1)} → ${a2.toFixed(1)})`);
+      await tv.screenshot({ path: path.join(SHOTS, 'display-countdown-ring.png') });
+    });
+
+    await t.test('level change: felt sweep and blinds flip', async () => {
+      await act({ type: 'clock.next' });
+      await tv.waitForSelector('#blinds.flip');
+      assert.ok(await tv.locator('.sweep.go').count());
+    });
+
+    await t.test('break: carousel of everyone still in', async () => {
+      await act({ type: 'clock.next' });
+      await tv.waitForSelector('.break-row:not(.hidden)');
+      assert.equal(await tv.locator('.br-p').count(), 4 * 2, '4 players still in (shown twice for the loop)');
+      assert.equal(await tv.isVisible('#blinds'), false);
+      await tv.waitForFunction(() => document.getElementById('spotlight').dataset.busy !== '1' && !document.getElementById('banner').classList.contains('show'), null, { timeout: 30000 });
+      await tv.waitForTimeout(800);
+      await tv.screenshot({ path: path.join(SHOTS, 'display-break.png') });
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

@@ -35,6 +35,7 @@ function defaultConfig() {
     currency: 'kr.',
     theme: 'classic',
     announcer: { voice: 'santa', lang: 'en' },
+    sfx: 'fewer',
     buyIn: 50,
     entryFee: 0,
     startingStack: 10000,
@@ -82,6 +83,7 @@ function normalizeConfig(input) {
     name: String(c.name ?? d.name).slice(0, 80) || 'Tournament',
     currency: String(c.currency ?? d.currency).slice(0, 4),
     theme: ['classic', 'christmas'].includes(c.theme) ? c.theme : 'classic',
+    sfx: ['fewer', 'all', 'off'].includes(c.sfx) ? c.sfx : 'fewer',
     announcer: {
       voice: ['santa', 'normal', 'off'].includes(c.announcer && c.announcer.voice) ? c.announcer.voice : 'santa',
       lang: ['en', 'da'].includes(c.announcer && c.announcer.lang) ? c.announcer.lang : 'en',

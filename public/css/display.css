@@ -339,3 +339,102 @@ body.display.cursor-hidden, body.display.cursor-hidden * { cursor: none; }
 .chipbar .remote-qr { margin-left: auto; display: flex; align-items: center; gap: 16px; padding: 0; background: none; border: 0; }
 .chipbar .remote-qr img { width: 104px; height: 104px; border-radius: 10px; background: #fff; padding: 4px; }
 .chipbar .remote-qr .qr-url { font-size: 17px; }
+
+/* ================= living table (silent ambient effects) ================= */
+.sky { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+/* northern lights (Christmas) */
+.aurora { position: absolute; left: -10%; right: -10%; top: -120px; height: 560px; opacity: 0; filter: blur(50px); transition: opacity 2s; }
+.theme-christmas .aurora { opacity: .55; }
+.aurora i { position: absolute; top: 0; height: 100%; width: 55%; border-radius: 50%; mix-blend-mode: screen; animation: aurora 38s ease-in-out infinite alternate; }
+.aurora i:nth-child(1) { left: 0; background: radial-gradient(ellipse at 50% 40%, rgba(40,220,140,.55), transparent 65%); }
+.aurora i:nth-child(2) { left: 30%; background: radial-gradient(ellipse at 50% 50%, rgba(60,140,255,.4), transparent 65%); animation-duration: 52s; animation-delay: -12s; }
+.aurora i:nth-child(3) { left: 55%; background: radial-gradient(ellipse at 50% 40%, rgba(170,90,255,.32), transparent 65%); animation-duration: 45s; animation-delay: -25s; }
+@keyframes aurora { 0% { transform: translateX(-8%) scaleY(.85); opacity: .6; } 50% { opacity: 1; } 100% { transform: translateX(10%) scaleY(1.1); opacity: .7; } }
+
+/* Santa's sleigh fly-by */
+.sleigh { position: absolute; left: 0; top: var(--y, 160px); width: 560px; opacity: 0; transform: translateX(2000px); }
+.sleigh svg { width: 100%; display: block; fill: #ffe9b0; stroke: #ffe9b0; filter: drop-shadow(0 0 10px rgba(255,220,140,.7)); }
+.sleigh .nose { fill: #ff3b4e; filter: drop-shadow(0 0 6px #ff3b4e); }
+.sleigh.fly { animation: sleigh 12.5s cubic-bezier(.35,.05,.6,.95) forwards; }
+.sleigh.fly .sl-body { animation: bob 1.1s ease-in-out infinite; }
+@keyframes sleigh {
+  0% { opacity: 0; transform: translate(2000px, 40px) rotate(-4deg); }
+  8% { opacity: .95; }
+  50% { transform: translate(700px, -30px) rotate(-6deg); }
+  92% { opacity: .95; }
+  100% { opacity: 0; transform: translate(-700px, -110px) rotate(-8deg); }
+}
+@keyframes bob { 50% { transform: translateY(-5px); } }
+.sleigh .trail { position: absolute; left: 470px; top: 60px; width: 600px; height: 40px;
+  background:
+    radial-gradient(circle, #fff6d0 0 2px, transparent 3px) 0 0 / 34px 18px,
+    radial-gradient(circle, #ffd76a 0 1.5px, transparent 2.5px) 12px 9px / 46px 22px;
+  -webkit-mask: linear-gradient(90deg, #000, transparent); mask: linear-gradient(90deg, #000, transparent);
+  animation: twinkle 0.9s steps(2) infinite; opacity: .9; }
+
+/* shooting star (Classic theme) */
+.shooting-star { position: absolute; left: 0; top: var(--y, 120px); width: 260px; height: 3px; border-radius: 3px; opacity: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0), #fff); filter: drop-shadow(0 0 8px #fff); transform: translateX(1900px) rotate(-18deg); }
+.shooting-star.fly { animation: shoot 2.4s ease-in forwards; }
+@keyframes shoot { 0% { opacity: 0; transform: translate(1900px, -60px) rotate(-18deg); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(500px, 400px) rotate(-18deg); } }
+
+/* last 30 seconds: a glowing ring around the table drains away */
+.rail-ring { position: absolute; inset: -8px; width: calc(100% + 16px); height: calc(100% + 16px); pointer-events: none; opacity: 0; transition: opacity .6s; overflow: visible; }
+.rail-ring rect { fill: none; stroke: var(--gold); stroke-width: 6; stroke-linecap: round; stroke-dasharray: 100 100; transition: stroke-dasharray .25s linear; filter: drop-shadow(0 0 10px rgba(246,196,83,.9)); }
+.rail-ring.on { opacity: 1; }
+
+/* level change: light sweep over the felt + blinds flip in */
+.sweep { position: absolute; inset: 0; pointer-events: none; transform: translateX(-120%);
+  background: linear-gradient(105deg, transparent 35%, rgba(255,240,200,.22) 50%, transparent 65%); }
+.sweep.go { animation: sweep 1.8s ease-out; }
+@keyframes sweep { to { transform: translateX(120%); } }
+.blinds.flip { animation: flip .9s cubic-bezier(.2,1.4,.4,1); transform-origin: 50% 60%; }
+@keyframes flip { 0% { transform: perspective(600px) rotateX(90deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+
+/* prize pool counts up with a golden glint */
+.card.pool::after { content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none; transform: translateX(-130%);
+  background: linear-gradient(110deg, transparent 30%, rgba(255,245,200,.45) 50%, transparent 70%); }
+.card.pool.glint::after { animation: sweep 1.4s ease-out; }
+
+/* seats breathe softly */
+.seat:not(.out):not(.empty) .ring { animation: breathe 7s ease-in-out infinite; }
+.seat:nth-child(3n+1) .ring { animation-delay: -2.3s; }
+.seat:nth-child(3n+2) .ring { animation-delay: -4.6s; }
+@keyframes breathe { 50% { box-shadow: 0 10px 28px rgba(0,0,0,.6), 0 0 42px rgba(246,196,83,.45); } }
+
+/* rebuy / add-on: sparkles for a minute */
+.seat.sparkle .ring::after { content: ""; position: absolute; inset: -26px; border-radius: 50%; pointer-events: none; z-index: 4;
+  background:
+    radial-gradient(circle, #fff 0 2px, transparent 3px) 10% 20% / 40px 40px no-repeat,
+    radial-gradient(circle, #ffe08a 0 2.5px, transparent 3.5px) 88% 12% / 40px 40px no-repeat,
+    radial-gradient(circle, #fff 0 1.8px, transparent 3px) 95% 70% / 40px 40px no-repeat,
+    radial-gradient(circle, #ffe08a 0 2px, transparent 3px) 4% 78% / 40px 40px no-repeat,
+    radial-gradient(circle, #fff 0 1.5px, transparent 2.5px) 50% 0 / 40px 40px no-repeat;
+  animation: sparkle 2.2s linear infinite; }
+@keyframes sparkle { 0% { transform: rotate(0); opacity: .4; } 50% { opacity: 1; } 100% { transform: rotate(360deg); opacity: .4; } }
+
+/* knocked out (Christmas): frozen under frost instead of plain grey */
+.theme-christmas .seat.out { filter: saturate(.35) brightness(.9); opacity: .82; }
+.theme-christmas .seat.out .ring { background: linear-gradient(160deg, #e6f4ff, #8fb8de); box-shadow: 0 0 22px rgba(170,215,255,.45); }
+.theme-christmas .seat.out .avatar::after { content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,255,255,.75), transparent 35%),
+    repeating-conic-gradient(from 15deg, rgba(255,255,255,.22) 0 2deg, transparent 2deg 30deg),
+    linear-gradient(150deg, rgba(225,242,255,.7), rgba(140,190,240,.35)); }
+.theme-christmas .seat.out .outtag { background: #5b8fc7; }
+
+/* fun facts ticker in the bottom bar */
+.ticker { margin-left: auto; max-width: 700px; font-size: 24px; font-weight: 700; color: rgba(255,255,255,.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker.in { animation: tickIn .8s ease-out; }
+@keyframes tickIn { from { opacity: 0; transform: translateY(14px); } }
+
+/* break: carousel of everyone still in */
+.is-break .blinds, .is-break .ante, .is-break .next { display: none; }
+.break-row { width: 640px; margin-top: 18px; }
+.br-h { font-size: 16px; font-weight: 900; letter-spacing: .3em; color: rgba(255,255,255,.6); text-transform: uppercase; margin-bottom: 10px; }
+.br-track { overflow: hidden; -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent); }
+.br-belt { display: flex; gap: 26px; width: max-content; padding-top: 26px; animation: belt 40s linear infinite; }
+@keyframes belt { to { transform: translateX(-50%); } }
+.br-p { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 90px; }
+.br-p .ring { position: relative; border-radius: 50%; padding: 3px; background: conic-gradient(var(--red-2), var(--gold), var(--red-2)); }
+.br-p span { font-size: 16px; font-weight: 800; }
