@@ -91,14 +91,46 @@
   let queued = 0;
   let realVoice = false; // ElevenLabs Santa is set up on the server
 
-  /* ---------- real Santa voice: play server-made clips in order ---------- */
+  /* ---------- who may speak ----------
+   * Only a page that has been clicked (browsers block sound before that) speaks, and if several
+   * TV pages are open (a second tab, a MacBook window + the TV), only the one clicked last speaks.
+   */
+  let enabled = false;
+  let speaker = true;
+  const myId = Math.random().toString(36).slice(2);
+  let channel = null;
+  try {
+    channel = new BroadcastChannel('poker-announcer');
+    channel.onmessage = (m) => { if (m.data && m.data.claim && m.data.claim !== myId) speaker = false; };
+  } catch { /* old browser: just speak */ }
+
+  /* ---------- real Santa voice: play server-made clips in order (Web Audio) ----------
+   * One AudioContext, unlocked by the click, plays every clip — no per-clip autoplay blocks.
+   * Never mixes voices: a clip that fails is skipped; only if ElevenLabs keeps failing do we
+   * switch to the built-in voice for the rest of the night.
+   */
+  let ctx = null;
+  let failsInARow = 0;
+  let realVoiceBroken = false;
   const clipQueue = [];
   let clipPlaying = false;
+  function audioCtx() {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  }
+  function fetchClip(text) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 20000);
+    return fetch('/api/tts?text=' + encodeURIComponent(text), { signal: ctl.signal })
+      .then((r) => { if (!r.ok) throw new Error('clip ' + r.status); return r.arrayBuffer(); })
+      .then((buf) => new Promise((res, rej) => audioCtx().decodeAudioData(buf, res, rej)))
+      .finally(() => clearTimeout(timer));
+  }
   function playClip(text, lang) {
     if (clipQueue.length >= 4) clipQueue.splice(0, clipQueue.length - 3); // don't fall far behind
-    const audio = new Audio('/api/tts?text=' + encodeURIComponent(text));
-    audio.preload = 'auto'; // starts generating/downloading right away
-    clipQueue.push({ audio, text, lang });
+    const item = { text, lang, buffer: fetchClip(text) }; // starts generating/downloading right away
+    item.buffer.catch(() => {}); // handled when its turn comes
+    clipQueue.push(item);
     nextClip();
   }
   function nextClip() {
@@ -106,22 +138,26 @@
     const item = clipQueue.shift();
     if (!item) return;
     clipPlaying = true;
-    let done = false;
-    const finish = (fallback) => {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      clipPlaying = false;
-      if (fallback) browserSay(item.text, { voice: 'santa', lang: item.lang });
-      nextClip();
-    };
-    // if the clip can't start within 12 s (no internet, ElevenLabs down…) use the built-in voice
-    const timer = setTimeout(() => { item.audio.pause(); finish(true); }, 12000);
-    item.audio.onended = () => finish(false);
-    item.audio.onerror = () => finish(true);
-    item.audio.onplaying = () => clearTimeout(timer);
-    if (beforeSpeak) beforeSpeak();
-    setTimeout(() => item.audio.play().catch(() => finish(true)), beforeSpeak ? 450 : 0);
+    const done = () => { clipPlaying = false; nextClip(); };
+    item.buffer.then((buffer) => {
+      failsInARow = 0;
+      if (beforeSpeak) beforeSpeak();
+      const c = audioCtx();
+      if (c.state === 'suspended') c.resume();
+      const src = c.createBufferSource();
+      src.buffer = buffer;
+      src.connect(c.destination);
+      src.onended = done;
+      src.start(c.currentTime + (beforeSpeak ? 0.45 : 0));
+      document.dispatchEvent(new CustomEvent('announcer:clip', { detail: item.text }));
+    }).catch(() => {
+      failsInARow++;
+      if (failsInARow >= 3) {
+        realVoiceBroken = true; // ElevenLabs is clearly unavailable tonight: one consistent voice from now on
+        browserSay(item.text, { voice: 'santa', lang: item.lang });
+      }
+      done();
+    });
   }
 
   function synth() { return window.speechSynthesis || null; }
@@ -146,7 +182,7 @@
     const style = opts.voice || cfg.voice;
     const lang = opts.lang || cfg.lang;
     if (style === 'off' || !text) return;
-    if (style === 'santa' && realVoice && !opts.browser) return playClip(text, lang);
+    if (style === 'santa' && realVoice && !realVoiceBroken && !opts.browser) return playClip(text, lang);
     browserSay(text, { voice: style, lang });
   }
 
@@ -173,7 +209,7 @@
 
   /** Speak for a game event (from the TV display). */
   function handle(e, state) {
-    if (!state || cfg.voice === 'off') return;
+    if (!state || cfg.voice === 'off' || !enabled || !speaker) return;
     const L = LINES[cfg.lang] || LINES.en;
     const st = cfg.voice === 'santa' ? 'santa' : 'normal';
     const cur = state.config.currency;
@@ -236,8 +272,18 @@
     onBeforeSpeak(fn) { beforeSpeak = fn; },
     handle,
     say,
-    test(c, opts = {}) { const lang = (c && c.lang) || cfg.lang; const v = (c && c.voice) || cfg.voice; say((LINES[lang] || LINES.en).test[v === 'santa' ? 'santa' : 'normal'], { voice: v === 'off' ? 'normal' : v, lang, browser: opts.browser }); },
+    test(c, opts = {}) { this.unlock({ claim: false }); const lang = (c && c.lang) || cfg.lang; const v = (c && c.voice) || cfg.voice; say((LINES[lang] || LINES.en).test[v === 'santa' ? 'santa' : 'normal'], { voice: v === 'off' ? 'normal' : v, lang, browser: opts.browser }); },
     get realVoice() { return realVoice; },
+    get speaking() { return enabled && speaker; },
+    /** Call from a click: allows sound on this page and makes it the one that speaks. */
+    unlock({ claim = true } = {}) {
+      enabled = true;
+      try { audioCtx().resume(); } catch { /* no audio */ }
+      if (claim) {
+        speaker = true;
+        if (channel) channel.postMessage({ claim: myId });
+      }
+    },
     lines: LINES,
   };
   // voices load asynchronously in Chrome

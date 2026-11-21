@@ -718,6 +718,7 @@ test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !ch
     display.on('pageerror', (e) => errors.push(e.message));
     await display.goto(base + '/display');
     await display.waitForSelector('.seat');
+    await display.click('body'); // sound on (browsers require one click)
     await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
     const act = (a) => c.emitWithAck('action', a);
     const said = () => display.evaluate(() => window.__said.map((x) => x.text).join(' | '));
@@ -953,8 +954,7 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
   const tts = () => calls.filter((x) => x.kind === 'tts');
   const spy = () => {
     window.__played = []; window.__said = [];
-    const orig = HTMLMediaElement.prototype.play;
-    HTMLMediaElement.prototype.play = function () { window.__played.push(decodeURIComponent(this.src)); return orig.call(this); };
+    document.addEventListener('announcer:clip', (e) => window.__played.push(e.detail));
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
   };
   try {
@@ -1020,7 +1020,8 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
       assert.equal(tts().length - before, made, 'nothing paid for twice');
     });
 
-    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    const tvCtx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
+    const display = await tvCtx.newPage();
     await display.addInitScript(spy);
     display.on('pageerror', (e) => errors.push(e.message));
     await display.goto(base + '/display');
@@ -1039,18 +1040,57 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
       assert.deepEqual(await display.evaluate(() => window.__said), [], 'no robot voice used');
     });
 
-    await t.test('if ElevenLabs fails, the built-in voice says it instead', async () => {
+    await t.test('a second TV page stays quiet; only the clicked one speaks', async () => {
+      const tv2 = await display.context().newPage(); // another tab in the same browser
+      await tv2.addInitScript(spy);
+      await tv2.goto(base + '/display');
+      await tv2.waitForSelector('.seat');
+      await c.emitWithAck('action', { type: 'player.addon', playerId: ids.Tony });
+      await display.waitForFunction(() => window.__played.some((s) => /Tony takes the add-on/.test(s)), null, { timeout: 15000 });
+      await tv2.waitForTimeout(800);
+      assert.deepEqual(await tv2.evaluate(() => [window.__played, window.__said]), [[], []], 'unclicked TV page is silent');
+      // clicking the second page hands the voice over to it
+      await tv2.click('body');
+      await c.emitWithAck('action', { type: 'undo' });
+      await c.emitWithAck('action', { type: 'player.addon', playerId: ids.Tony });
+      await tv2.waitForFunction(() => window.__played.some((s) => /Tony takes the add-on/.test(s)), null, { timeout: 15000 });
+      const n = await display.evaluate(() => window.__played.filter((s) => /Tony takes the add-on/.test(s)).length);
+      assert.equal(n, 1, 'first page no longer speaks');
+      await tv2.close();
+      await display.click('body'); // hand the voice back
+    });
+
+    await t.test('one failed clip is skipped — never the computer voice mixed in', async () => {
       ttsFails = true;
       await c.emitWithAck('action', { type: 'player.eliminate', playerId: ids.Jake });
-      await display.waitForFunction(() => window.__said.some((s) => /Jake/.test(s)), null, { timeout: 20000 });
+      await display.waitForTimeout(2500);
+      assert.deepEqual(await display.evaluate(() => window.__said), [], 'no robot voice for a single failure');
       ttsFails = false;
     });
 
+    await t.test('if ElevenLabs keeps failing, switch to the built-in voice for good (not mixed)', async () => {
+      ttsFails = true;
+      // lines made live (not prepared) — bust-outs — so they really fail
+      for (let i = 0; i < 3; i++) {
+        await c.emitWithAck('action', { type: 'undo' });
+        await c.emitWithAck('action', { type: 'player.eliminate', playerId: ids.Jake });
+      }
+      await display.waitForFunction(() => window.__said.length > 0, null, { timeout: 30000 });
+      ttsFails = false;
+      const clips = await display.evaluate(() => window.__played.length);
+      await c.emitWithAck('action', { type: 'clock.next' });
+      await display.waitForFunction((n) => window.__said.length >= 2, clips, { timeout: 10000 });
+      assert.equal(await display.evaluate(() => window.__played.length), clips, 'stays on one voice for the rest of the night');
+    });
+
     await t.test('Danish lines go to the same Santa voice', async () => {
+      await display.reload();
+      await display.waitForSelector('.seat');
+      await display.click('body');
       const s0 = await (await fetch(base + '/api/state')).json();
       await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { ...s0.config, announcer: { voice: 'santa', lang: 'da' } }, players: s0.players }) });
       await new Promise((res) => setTimeout(res, 300));
-      await c.emitWithAck('action', { type: 'clock.next' });
+      await c.emitWithAck('action', { type: 'clock.goto', levelIndex: 1 });
       await display.waitForFunction(() => window.__played.some((s) => /Niveau 2! Blinds er nu 50 og 100/.test(s)), null, { timeout: 15000 });
     });
 

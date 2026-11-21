@@ -72,12 +72,12 @@
 
   document.addEventListener('click', () => {
     enableAudio();
+    PT.announcer.unlock(); // this TV page is now the one that speaks
     $('hint').classList.add('gone');
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {});
     }
   });
-  setTimeout(() => $('hint').classList.add('gone'), 12000);
 
   // hide the mouse cursor when idle (it's a TV)
   let cursorTimer;
