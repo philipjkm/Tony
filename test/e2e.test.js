@@ -1103,3 +1103,74 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('everyone except Philip adds 300 to the prize pool — pool, payouts and final results', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-extra-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  const names = ['Philip', 'Tony', 'Maria', 'Jake', 'Sofia', 'Lars', 'Nina', 'Omar', 'Emma'];
+  try {
+    await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { buyIn: 200, payouts: { mode: 'percent', places: [50, 30, 20] } }, players: names.map((name) => ({ name })) }) });
+    const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    setup.on('pageerror', (e) => errors.push(e.message));
+    setup.on('dialog', (d) => d.accept());
+    await setup.goto(base + '/setup#money');
+    await setup.waitForSelector('.pl-card');
+
+    await t.test('set 300 extra and exempt Philip in Settings', async () => {
+      await setup.fill('[data-k="prizePool.extra"]', '300');
+      await setup.waitForSelector('[data-pl-extra="0"]');
+      assert.equal(await setup.locator('[data-pl-extra]:checked').count(), 9, 'everyone pays by default');
+      await setup.uncheck('[data-pl-extra="0"]'); // Philip
+      assert.match(await setup.textContent('#pool-preview'), /2\.400 kr\. \(8 × 300 kr\.\)/);
+      assert.match(await setup.textContent('#pool-preview'), /4\.200 kr\.[\s\S]*Prize pool now/);
+      await setup.click('#b-save');
+      await setup.waitForFunction(() => !document.getElementById('s-status').classList.contains('dirty'));
+      await setup.locator('.pl-card').first().screenshot({ path: path.join(SHOTS, 'settings-pays-extra.png') });
+    });
+
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    display.on('pageerror', (e) => errors.push(e.message));
+    await display.goto(base + '/display');
+    await display.waitForSelector('.seat');
+
+    await t.test('TV prize pool includes the extra 2.400 kr.', async () => {
+      // 9 × 200 buy-ins + 8 × 300 extra = 4.200
+      assert.equal(await display.textContent('#pool'), '4.200 kr.');
+      assert.match(await display.textContent('#pool-sub'), /\+2\.400 kr\. extra/);
+      assert.match(await display.textContent('#payouts'), /2\.100 kr\.[\s\S]*1\.260 kr\.[\s\S]*840 kr\./);
+    });
+
+    await t.test('final results: Philip paid 200, everyone else 500; totals balance', async () => {
+      await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+      const s = await (await fetch(base + '/api/state')).json();
+      const id = Object.fromEntries(s.players.map((p) => [p.name, p.id]));
+      await c.emitWithAck('action', { type: 'clock.start' });
+      for (const n of ['Emma', 'Omar', 'Nina', 'Lars', 'Sofia', 'Jake', 'Maria', 'Tony']) await c.emitWithAck('action', { type: 'player.eliminate', playerId: id[n] });
+      await display.waitForSelector('#final:not(.hidden)', { timeout: 20000 });
+      const rows = await display.locator('#final tbody tr').evaluateAll((trs) => trs.map((tr) => [...tr.querySelectorAll('td')].map((td) => td.textContent.trim())));
+      const philip = rows.find((r) => r[1].includes('Philip'));
+      const tony = rows.find((r) => r[1].includes('Tony'));
+      assert.equal(philip[2], '200 kr.', 'Philip paid only the buy-in');
+      assert.equal(philip[3], '2.100 kr.', 'Philip won 1st');
+      assert.equal(philip[4], '+1.900 kr.');
+      assert.equal(tony[2], '500 kr.', 'buy-in + 300 extra');
+      assert.equal(tony[4], '+760 kr.', '2nd: 1.260 − 500');
+      const foot = await display.textContent('#final tfoot');
+      assert.match(foot, /4\.200 kr\.[\s\S]*4\.200 kr\./, 'paid in = paid out');
+      await display.screenshot({ path: path.join(SHOTS, 'display-results-extra.png') });
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

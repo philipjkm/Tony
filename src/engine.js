@@ -41,7 +41,7 @@ function defaultConfig() {
     seats: 10,
     rebuy: { enabled: true, price: 50, chips: 10000, lastLevel: 4, maxPerPlayer: 0 },
     addon: { enabled: true, price: 50, chips: 15000, lastLevel: 5, maxPerPlayer: 1 },
-    prizePool: { mode: 'auto', fixed: 0, added: 0, guarantee: 0 },
+    prizePool: { mode: 'auto', fixed: 0, added: 0, guarantee: 0, extra: 0 },
     payouts: { mode: 'percent', places: [50, 30, 20] },
     levels: defaultLevels(),
     chips: [
@@ -109,6 +109,8 @@ function normalizeConfig(input) {
       fixed: nonNeg(pp.fixed),
       added: nonNeg(pp.added),
       guarantee: nonNeg(pp.guarantee),
+      // extra amount each player puts into the pool (players can be exempted with paysExtra: false)
+      extra: nonNeg(pp.extra),
     },
     payouts: { mode: pay.mode === 'amount' ? 'amount' : 'percent', places },
     levels,
@@ -135,6 +137,7 @@ function newPlayer(p) {
     name: String((p && p.name) || 'Player').slice(0, 40),
     photo: safeUrl(p && p.photo),
     hat: cleanHat(p && p.hat),
+    paysExtra: !(p && p.paysExtra === false),
     status: 'active', // 'active' | 'out'
     rebuys: 0,
     addons: 0,
@@ -193,6 +196,7 @@ function updateSetup(t, config, players, now = Date.now()) {
         existing.name = String(p.name || existing.name).slice(0, 40);
         existing.photo = safeUrl(p.photo);
         existing.hat = cleanHat(p.hat);
+        existing.paysExtra = p.paysExtra !== false;
         return existing;
       }
       return newPlayer(p);
@@ -285,10 +289,12 @@ function derive(t, now = Date.now()) {
   const rebuys = players.reduce((s, p) => s + p.rebuys, 0);
   const addons = players.reduce((s, p) => s + p.addons, 0);
 
+  const extraPayers = players.filter((p) => p.paysExtra !== false).length;
+  const extraTotal = cfg.prizePool.mode === 'fixed' ? 0 : cfg.prizePool.extra * extraPayers;
   let prizePool;
   if (cfg.prizePool.mode === 'fixed') prizePool = cfg.prizePool.fixed;
   else {
-    prizePool = cfg.buyIn * entries + cfg.rebuy.price * rebuys + cfg.addon.price * addons + cfg.prizePool.added;
+    prizePool = cfg.buyIn * entries + cfg.rebuy.price * rebuys + cfg.addon.price * addons + cfg.prizePool.added + extraTotal;
     prizePool = Math.max(prizePool, cfg.prizePool.guarantee);
   }
   // never pay more places than there are players (e.g. 3 paid places but only 2 entrants)
@@ -343,6 +349,8 @@ function derive(t, now = Date.now()) {
     finished,
     winnerId: finished ? active[0].id : null,
     paidPlaces: paidCount,
+    extraTotal,
+    extraPayers,
     // bubble: one more bust-out and everyone left is paid
     bubble: !finished && entries > paidCount && active.length === paidCount + 1,
     inTheMoney: !finished && entries > paidCount && active.length <= paidCount && active.length > 1,

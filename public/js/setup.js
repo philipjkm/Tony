@@ -12,7 +12,7 @@
     const s = await fetch('/api/state').then((r) => r.json());
     cfg = s.config;
     PT.useCurrency(cfg.currency);
-    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat }));
+    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false }));
     PT.applyTheme(cfg.theme);
     progress = Object.fromEntries(s.players.map((p) => [p.id, p]));
     renderAll();
@@ -51,6 +51,7 @@
     setPath(cfg, el.dataset.k, v);
     if (el.dataset.k === 'currency') { PT.useCurrency(v); renderPayouts(); }
     if (el.dataset.k === 'theme') PT.applyTheme(v);
+    if (el.dataset.k === 'prizePool.extra' || el.dataset.k === 'prizePool.mode') renderPlayers();
     setDirty(true);
     applyShows();
     renderPreview();
@@ -71,8 +72,9 @@
     const rb = Object.values(progress).reduce((s, p) => s + (p.rebuys || 0), 0);
     const ad = Object.values(progress).reduce((s, p) => s + (p.addons || 0), 0);
     if (cfg.prizePool.mode === 'fixed') return cfg.prizePool.fixed;
-    return Math.max(cfg.buyIn * n + cfg.rebuy.price * rb + cfg.addon.price * ad + cfg.prizePool.added, cfg.prizePool.guarantee);
+    return Math.max(cfg.buyIn * n + cfg.rebuy.price * rb + cfg.addon.price * ad + cfg.prizePool.added + extraTotal(), cfg.prizePool.guarantee);
   }
+  const extraTotal = () => (cfg.prizePool.extra || 0) * players.filter((p) => p.paysExtra !== false).length;
   function renderPreview() {
     const cur = cfg.currency;
     const pool = projectedPool();
@@ -82,6 +84,7 @@
       ['Players', n],
       ['Each player pays', fmtMoney(cfg.buyIn + cfg.entryFee, cur)],
       ['House collects', fmtMoney(cfg.entryFee * n, cur)],
+      ...(cfg.prizePool.extra && cfg.prizePool.mode === 'auto' ? [['Extra in the pool', `${fmtMoney(extraTotal(), cur)} (${players.filter((p) => p.paysExtra !== false).length} × ${fmtMoney(cfg.prizePool.extra, cur)})`]] : []),
       ['Starting chips in play', fmtShort(cfg.startingStack * n)],
     ];
     $('pool-preview').innerHTML = items.map(([k, v]) => `<div class="pv"><b>${esc(v)}</b>${esc(k)}</div>`).join('');
@@ -325,6 +328,7 @@
         <button class="ph" data-photo="${i}" title="Upload photo">${PT.hatHTML(p)}${avatarHTML(p, 86)}</button>
         <input type="text" value="${esc(p.name)}" data-pl-name="${i}" maxlength="40">
         <select class="hat-pick" data-pl-hat="${i}" aria-label="Hat for ${esc(p.name)}">${hatOptions(p.hat)}</select>
+        ${cfg.prizePool.extra && cfg.prizePool.mode === 'auto' ? `<label class="pays"><input type="checkbox" data-pl-extra="${i}" ${p.paysExtra !== false ? 'checked' : ''}> Pays the extra ${esc(fmtMoney(cfg.prizePool.extra, cfg.currency))}</label>` : ''}
         <span class="st">${esc(st + seat + extra)}</span></div>`;
     }).join('');
   }
@@ -333,6 +337,13 @@
     return opts.map(([k, l]) => `<option value="${k}" ${k === (cur || 'auto') ? 'selected' : ''}>${l}</option>`).join('');
   }
   $('pl-grid').addEventListener('change', (e) => {
+    if (e.target.dataset.plExtra !== undefined) {
+      players[e.target.dataset.plExtra].paysExtra = e.target.checked;
+      setDirty(true);
+      renderPreview();
+      renderPayouts(false);
+      return;
+    }
     const i = e.target.dataset.plHat;
     if (i === undefined) return;
     players[i].hat = e.target.value;
@@ -442,7 +453,7 @@
     if (!res.ok) return toast(res.error || 'Save failed', { error: true });
     cfg = res.state.config;
     PT.useCurrency(cfg.currency);
-    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat }));
+    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false }));
     progress = Object.fromEntries(res.state.players.map((p) => [p.id, p]));
     renderAll();
     setDirty(false);
@@ -459,7 +470,7 @@
   $('b-default-save').onclick = async () => {
     const res = await fetch('/api/default', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config: cfg, players: players.map(({ id, name, photo, hat }) => ({ id, name, photo, hat })) }),
+      body: JSON.stringify({ config: cfg, players: players.map(({ id, name, photo, hat, paysExtra }) => ({ id, name, photo, hat, paysExtra })) }),
     }).then((r) => r.json()).catch(() => ({ ok: false }));
     toast(res.ok ? '⭐ Saved as your default setup' : 'Could not save the default', { error: !res.ok });
   };

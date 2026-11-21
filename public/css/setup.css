@@ -168,3 +168,6 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .sv-voice .acts .btn { height: 36px; font-size: 13px; padding: 0 12px; }
 .sv-remove { margin-top: 14px; font-size: 13px; color: var(--muted); text-decoration: underline; }
 #sv-status.ok { color: var(--green); }
+
+.pl-card .pays { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--muted); cursor: pointer; }
+.pl-card .pays input { width: 16px; height: 16px; accent-color: var(--green); }

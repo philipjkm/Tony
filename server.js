@@ -178,7 +178,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
     try {
       // keep it clean: settings + who plays (names, photos, hats), no game progress
       const tmp = engine.createTournament(config, players, now());
-      const def = { savedAt: new Date().toISOString(), config: tmp.config, players: tmp.players.map(({ id, name, photo, hat }) => ({ id, name, photo, hat })) };
+      const def = { savedAt: new Date().toISOString(), config: tmp.config, players: tmp.players.map(({ id, name, photo, hat, paysExtra }) => ({ id, name, photo, hat, paysExtra })) };
       fs.writeFileSync(defaultFile, JSON.stringify(def, null, 2));
       res.json({ ok: true });
     } catch (e) {

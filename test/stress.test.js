@@ -46,7 +46,7 @@ function check(t, now, ctx) {
   const rebuys = t.players.reduce((s, p) => s + p.rebuys, 0);
   const addons = t.players.reduce((s, p) => s + p.addons, 0);
   const expectedPool = cfg.prizePool.mode === 'fixed' ? cfg.prizePool.fixed
-    : Math.max(cfg.buyIn * t.players.length + cfg.rebuy.price * rebuys + cfg.addon.price * addons + cfg.prizePool.added, cfg.prizePool.guarantee);
+    : Math.max(cfg.buyIn * t.players.length + cfg.rebuy.price * rebuys + cfg.addon.price * addons + cfg.prizePool.added + cfg.prizePool.extra * t.players.filter((p) => p.paysExtra !== false).length, cfg.prizePool.guarantee);
   assert.equal(d.prizePool, expectedPool, `pool ${where()}`);
   if (cfg.payouts.mode === 'percent') {
     const sum = d.payouts.reduce((s, p) => s + p.amount, 0);
@@ -68,7 +68,7 @@ function randomConfig(r) {
   cfg.rebuy.lastLevel = Math.floor(r() * 8);
   cfg.rebuy.maxPerPlayer = Math.floor(r() * 3);
   cfg.addon.lastLevel = Math.floor(r() * 10);
-  cfg.prizePool = r() < 0.2 ? { mode: 'fixed', fixed: 1000, added: 0, guarantee: 0 } : { mode: 'auto', fixed: 0, added: Math.floor(r() * 200), guarantee: r() < 0.3 ? 1500 : 0 };
+  cfg.prizePool = r() < 0.2 ? { mode: 'fixed', fixed: 1000, added: 0, guarantee: 0, extra: 300 } : { mode: 'auto', fixed: 0, added: Math.floor(r() * 200), guarantee: r() < 0.3 ? 1500 : 0, extra: r() < 0.5 ? 300 : 0 };
   cfg.payouts = r() < 0.8 ? { mode: 'percent', places: [[100], [65, 35], [50, 30, 20], [70, 30]][Math.floor(r() * 4)] } : { mode: 'amount', places: [300, 200] };
   if (r() < 0.3) cfg.levels = cfg.levels.slice(0, 4 + Math.floor(r() * 6)); // short structures run past the end
   if (r() < 0.2) cfg.levels.forEach((l) => { l.minutes = 5; });
@@ -78,7 +78,7 @@ function randomConfig(r) {
 function simulate(seed) {
   const r = rng(seed);
   const n = 2 + Math.floor(r() * 16);
-  const players = Array.from({ length: n }, (_, i) => ({ name: 'P' + i }));
+  const players = Array.from({ length: n }, (_, i) => ({ name: 'P' + i, paysExtra: i !== 0 }));
   let now = 1_700_000_000_000;
   const start = now;
   let t = E.createTournament(randomConfig(r), players, now);

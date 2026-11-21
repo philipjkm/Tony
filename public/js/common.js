@@ -217,7 +217,8 @@
     const d = s.derived;
     const won = Object.fromEntries(d.payouts.map((p) => [p.place, p.amount]));
     const rows = s.players.map((p) => {
-      const paid = cfg.buyIn + cfg.entryFee + p.rebuys * cfg.rebuy.price + p.addons * cfg.addon.price;
+      const extra = cfg.prizePool.mode === 'fixed' || p.paysExtra === false ? 0 : cfg.prizePool.extra || 0;
+      const paid = cfg.buyIn + cfg.entryFee + extra + p.rebuys * cfg.rebuy.price + p.addons * cfg.addon.price;
       const w = (p.place && won[p.place]) || 0;
       return { p, place: p.place || 999, paid, won: w, net: w - paid };
     }).sort((a, b) => a.place - b.place);

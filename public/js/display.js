@@ -151,7 +151,8 @@
     fitText($('pool'), 128, 40);
     $('pool-sub').textContent = `${d.entries} ${d.entries === 1 ? 'entry' : 'entries'}`
       + (d.rebuys ? ` · ${d.rebuys} rebuy${d.rebuys > 1 ? 's' : ''}` : '')
-      + (d.addons ? ` · ${d.addons} add-on${d.addons > 1 ? 's' : ''}` : '');
+      + (d.addons ? ` · ${d.addons} add-on${d.addons > 1 ? 's' : ''}` : '')
+      + (d.extraTotal ? ` · +${fmtMoney(d.extraTotal, cur)} extra` : '');
     const placeName = {};
     s.players.forEach((p) => { if (p.place) placeName[p.place] = p.name; });
     const pays = d.payouts.slice(0, 9);

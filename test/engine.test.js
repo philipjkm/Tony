@@ -341,3 +341,31 @@ test('first start is flagged (for "shuffle up and deal")', () => {
   E.apply(t, { type: 'clock.pause' }, T0 + 1);
   assert.equal(E.apply(t, { type: 'clock.start' }, T0 + 2).events[0].first, false);
 });
+
+test('extra per player goes into the pool, except for exempted players', () => {
+  const players = ['Philip', 'Tony', 'Maria', 'Jake'].map((name, i) => ({ id: 'p' + i, name, paysExtra: name !== 'Philip' }));
+  const t = E.createTournament({ ...E.defaultConfig(), buyIn: 100, prizePool: { mode: 'auto', added: 0, guarantee: 0, extra: 300 } }, players, T0);
+  let d = E.derive(t, T0);
+  assert.equal(d.extraTotal, 900);
+  assert.equal(d.prizePool, 4 * 100 + 3 * 300);
+  assert.equal(d.payouts.reduce((s, p) => s + p.amount, 0), d.prizePool);
+  // a late player pays it too; settings change keeps Philip exempt
+  E.updateSetup(t, t.config, [...t.players.map((p) => ({ id: p.id, name: p.name, paysExtra: p.paysExtra })), { name: 'Late' }], T0);
+  d = E.derive(t, T0);
+  assert.equal(d.prizePool, 5 * 100 + 4 * 300);
+  assert.equal(t.players[0].paysExtra, false);
+  // fixed prize pool ignores it
+  t.config.prizePool.mode = 'fixed';
+  t.config.prizePool.fixed = 1000;
+  assert.equal(E.derive(t, T0).prizePool, 1000);
+});
+
+test('all browser scripts are valid JavaScript', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const vm = require('vm');
+  const dir = path.join(__dirname, '..', 'public', 'js');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js'))) {
+    assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f }), `${f} has a syntax error`);
+  }
+});
