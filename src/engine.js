@@ -121,7 +121,7 @@ function normalizeConfig(input) {
   };
 }
 
-const HATS = ['auto', 'none', 'santa', 'elf', 'beanie', 'antlers', 'tophat', 'tree', 'crown'];
+const HATS = ['auto', 'none', 'santa', 'elf', 'beanie', 'antlers', 'tophat', 'tree', 'crown', 'wreath', 'bow', 'halo', 'earmuffs'];
 const cleanHat = (h) => (HATS.includes(h) ? h : 'auto');
 
 function safeUrl(u) {

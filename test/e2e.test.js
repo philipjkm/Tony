@@ -806,3 +806,105 @@ test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !ch
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('9 different hats, payout % on TV, payouts changed mid-game from the phone, saved default', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-def-'));
+  let app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  const names = ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars', 'Nina', 'Omar', 'Emma', 'Ali'];
+  try {
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', seats: 9, buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] } }, players: names.map((name) => ({ name })) }) })).json();
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    display.on('pageerror', (e) => errors.push(e.message));
+    await display.goto(base + '/display');
+    await display.waitForSelector('.seat .hat');
+
+    await t.test('every one of the 9 players wears a different hat by default', async () => {
+      const hats = await display.locator('.seat .hat').evaluateAll((els) => els.map((e) => e.getAttribute('class')));
+      assert.equal(hats.length, 9);
+      assert.equal(new Set(hats).size, 9, hats.join(', '));
+      await display.waitForTimeout(400);
+      await display.screenshot({ path: path.join(SHOTS, 'display-9-hats.png') });
+    });
+
+    await t.test('payout percentages are shown on the TV', async () => {
+      const txt = await display.textContent('#payouts');
+      assert.match(txt, /1st[\s\S]*50%[\s\S]*450 kr\./);
+      assert.match(txt, /3rd[\s\S]*20%[\s\S]*180 kr\./);
+    });
+
+    await t.test('switch to top 4 and custom % from the phone during the game', async () => {
+      await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+      await c.emitWithAck('action', { type: 'clock.start' });
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: r.state.players[8].id });
+      const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+      const phone = await ctx.newPage();
+      phone.on('pageerror', (e) => errors.push(e.message));
+      phone.on('dialog', (d) => d.accept());
+      await phone.goto(base + '/remote');
+      await phone.tap('#b-menu');
+      await phone.tap('#menu a[href="/setup#payouts"]');
+      await phone.waitForSelector('#pay-list .pay-row');
+      await phone.tap('#pay-presets button:has-text("Top 4")');
+      assert.equal(await phone.locator('#pay-list .pay-row').count(), 4);
+      // custom: 40 / 30 / 20 / 10
+      for (const [i, v] of [[0, '40'], [1, '30'], [2, '20'], [3, '10']]) await phone.fill(`[data-pay="${i}"]`, v);
+      assert.match(await phone.textContent('#pay-sum'), /100%/);
+      await phone.tap('#b-save');
+      await display.waitForFunction(() => document.querySelectorAll('#payouts li').length === 4);
+      assert.match(await display.textContent('#payouts'), /1st[\s\S]*40%[\s\S]*360 kr\.[\s\S]*4th[\s\S]*10%[\s\S]*90 kr\./);
+      const s = await (await fetch(base + '/api/state')).json();
+      assert.equal(s.derived.running, true, 'clock kept running');
+      assert.equal(s.players.find((p) => p.name === 'Ali').status, 'out', 'progress kept');
+      await ctx.close();
+    });
+
+    await t.test('save as my default → used after a fresh start, and loadable in Settings', async () => {
+      const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      setup.on('pageerror', (e) => errors.push(e.message));
+      setup.on('dialog', (d) => d.accept());
+      await setup.goto(base + '/setup');
+      await setup.waitForSelector('.pl-card');
+      await setup.selectOption('[data-pl-hat="0"]', 'crown');
+      await setup.click('#b-default-save');
+      await setup.waitForSelector('.toast:has-text("Saved as your default")');
+      const def = JSON.parse(fs.readFileSync(path.join(dataDir, 'default.json'), 'utf8'));
+      assert.equal(def.players.length, 9);
+      assert.equal(def.players[0].hat, 'crown');
+      assert.deepEqual(def.config.payouts.places, [40, 30, 20, 10]);
+      assert.ok(!('status' in def.players[0]), 'no game progress in the default');
+
+      // something else gets set up, then "Load my default" brings it back into the form
+      await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { name: 'Other' }, players: [{ name: 'X' }, { name: 'Y' }] }) });
+      await setup.reload();
+      await setup.waitForSelector('.pl-card');
+      assert.equal(await setup.locator('.pl-card').count(), 2);
+      await setup.click('#b-default-load');
+      await setup.waitForFunction(() => document.querySelectorAll('.pl-card').length === 9);
+      assert.equal(await setup.inputValue('[data-pl-hat="0"]'), 'crown');
+      await setup.close();
+
+      // fresh start (no saved game) → the default is used
+      await app.stop();
+      fs.unlinkSync(path.join(dataDir, 'state.json'));
+      app = createApp({ dataDir, port: 0, log: () => {} });
+      const p2 = await app.start();
+      const s = await (await fetch(`http://127.0.0.1:${p2}/api/state`)).json();
+      assert.equal(s.players.length, 9);
+      assert.ok(s.players.every((p) => p.status === 'active'));
+      assert.deepEqual(s.config.payouts.places, [40, 30, 20, 10]);
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

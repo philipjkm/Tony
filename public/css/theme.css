@@ -101,3 +101,8 @@ a { color: inherit; }
   border: 2px dashed rgba(255,255,255,.65);
 }
 .chip-img { border-radius: 50%; object-fit: cover; flex: none; box-shadow: 0 4px 10px rgba(0,0,0,.5); }
+
+/* placement for hats that sit centred / wide on the head (Christmas theme) */
+.theme-christmas :is(.ring, .ph) > svg.hat.hat-wreath, .theme-christmas :is(.ring, .ph) > svg.hat.hat-bow { left: 14%; top: -36%; width: 72%; transform: rotate(-6deg); }
+.theme-christmas :is(.ring, .ph) > svg.hat.hat-halo { left: 10%; top: -40%; width: 80%; transform: none; }
+.theme-christmas :is(.ring, .ph) > svg.hat.hat-earmuffs { left: -6%; top: -10%; width: 112%; transform: none; }

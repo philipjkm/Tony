@@ -313,6 +313,7 @@
 
   /* ---------------- players ---------------- */
   function renderPlayers() {
+    PT.assignHats(players);
     $('pl-count').textContent = `${players.length} registered`;
     $('pl-grid').innerHTML = players.map((p, i) => {
       const pr = progress[p.id];
@@ -328,7 +329,7 @@
     }).join('');
   }
   function hatOptions(cur) {
-    const opts = [['auto', '🎲 Hat: surprise me'], ...Object.entries(PT.HATS).map(([k, v]) => [k, v.label]), ['none', 'No hat']];
+    const opts = [['auto', '🎁 Hat: automatic (everyone different)'], ...Object.entries(PT.HATS).map(([k, v]) => [k, v.label]), ['none', 'No hat']];
     return opts.map(([k, l]) => `<option value="${k}" ${k === (cur || 'auto') ? 'selected' : ''}>${l}</option>`).join('');
   }
   $('pl-grid').addEventListener('change', (e) => {
@@ -453,6 +454,27 @@
   };
 
   $('b-voice').onclick = () => PT.announcer.test(cfg.announcer);
+
+  // ---- my default setup (settings + players + photos + hats) ----
+  $('b-default-save').onclick = async () => {
+    const res = await fetch('/api/default', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ config: cfg, players: players.map(({ id, name, photo, hat }) => ({ id, name, photo, hat })) }),
+    }).then((r) => r.json()).catch(() => ({ ok: false }));
+    toast(res.ok ? '⭐ Saved as your default setup' : 'Could not save the default', { error: !res.ok });
+  };
+  $('b-default-load').onclick = async () => {
+    const res = await fetch('/api/default').then((r) => r.json()).catch(() => ({ ok: false }));
+    if (!res.ok) return toast('No default saved yet — press ⭐ Save as my default first', { error: true });
+    if (!confirm('Replace the settings and players in this form with your saved default?\n\nNothing changes on the TV until you press Save or Start new tournament.')) return;
+    cfg = res.config;
+    players = res.players;
+    PT.useCurrency(cfg.currency);
+    PT.applyTheme(cfg.theme);
+    renderAll();
+    setDirty(true);
+    toast('Default loaded — press Start new tournament (or Save) to use it');
+  };
 
   function renderAll() {
     bindFields();

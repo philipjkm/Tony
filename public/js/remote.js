@@ -147,6 +147,7 @@
   const wrap = document.querySelector('.r-table-wrap');
 
   function renderTable(s) {
+    PT.assignHats(s.players);
     const d = s.derived;
     const n = s.config.seats;
     const seats = $('r-seats');

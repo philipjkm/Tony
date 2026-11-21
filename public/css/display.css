@@ -332,3 +332,10 @@ body.display.cursor-hidden, body.display.cursor-hidden * { cursor: none; }
 .coin { position: absolute; top: -60px; font-size: 46px; animation: fall linear infinite; font-style: normal; }
 .spotlight .coin { z-index: 0; opacity: .85; }
 .spotlight .spot { position: relative; z-index: 1; }
+
+.payouts li .pct { font-size: 18px; font-weight: 800; color: var(--muted); padding: 3px 10px; margin-right: 14px; border-radius: 8px; background: rgba(255,255,255,.06); }
+
+/* phone QR lives in the bottom bar (only until the game is live) */
+.chipbar .remote-qr { margin-left: auto; display: flex; align-items: center; gap: 16px; padding: 0; background: none; border: 0; }
+.chipbar .remote-qr img { width: 104px; height: 104px; border-radius: 10px; background: #fff; padding: 4px; }
+.chipbar .remote-qr .qr-url { font-size: 17px; }

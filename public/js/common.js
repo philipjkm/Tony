@@ -163,16 +163,46 @@
       <rect x="12" y="74" width="96" height="14" rx="3" fill="#e0a92e"/>
       <circle cx="18" cy="28" r="6" fill="#fff3c4"/><circle cx="60" cy="16" r="7" fill="#fff3c4"/><circle cx="102" cy="28" r="6" fill="#fff3c4"/>
       <circle cx="36" cy="81" r="5" fill="#e5173f"/><circle cx="60" cy="81" r="5" fill="#1a9b4b"/><circle cx="84" cy="81" r="5" fill="#4ea0ff"/>` },
+    wreath: { label: '🌿 Holly wreath', svg: `<path d="M8 84 Q 60 44 112 84" stroke="#0f6b32" stroke-width="10" fill="none" stroke-linecap="round"/>
+      <g fill="#1fb357" stroke="#0f6b32" stroke-width="2">
+        <path d="M14 80 q-10 -14 6 -22 q2 10 10 12 z"/><path d="M30 68 q-4 -18 14 -20 q-2 10 4 16 z"/><path d="M50 60 q2 -18 18 -14 q-6 8 -2 16 z"/>
+        <path d="M72 60 q14 -10 22 4 q-10 2 -12 10 z"/><path d="M90 70 q16 -4 18 12 q-10 -2 -14 4 z"/></g>
+      <circle cx="40" cy="62" r="6" fill="#e5173f"/><circle cx="48" cy="58" r="6" fill="#c8102e"/><circle cx="76" cy="60" r="6" fill="#e5173f"/><circle cx="84" cy="64" r="6" fill="#ff3b4e"/><circle cx="60" cy="54" r="6" fill="#e5173f"/>` },
+    bow: { label: '🎀 Gift bow', svg: `<path d="M60 56 Q 14 10 10 44 Q 8 74 60 56 Z" fill="#e5173f" stroke="#a50d22" stroke-width="3"/>
+      <path d="M60 56 Q 106 10 110 44 Q 112 74 60 56 Z" fill="#e5173f" stroke="#a50d22" stroke-width="3"/>
+      <path d="M30 40 Q 40 46 52 52 M90 40 Q 80 46 68 52" stroke="#ff7a8a" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M54 60 L38 94 L50 88 L56 98 Z M66 60 L82 94 L70 88 L64 98 Z" fill="#c8102e"/>
+      <ellipse cx="60" cy="56" rx="12" ry="10" fill="#c8102e" stroke="#a50d22" stroke-width="3"/>` },
+    halo: { label: '😇 Angel halo', svg: `<ellipse cx="60" cy="40" rx="46" ry="14" fill="none" stroke="#ffe08a" stroke-width="12" opacity=".35"/>
+      <ellipse cx="60" cy="40" rx="46" ry="14" fill="none" stroke="#f6c453" stroke-width="7"/>
+      <ellipse cx="60" cy="37" rx="40" ry="10" fill="none" stroke="#fff6d0" stroke-width="2"/>` },
+    earmuffs: { label: '🎧 Earmuffs', svg: `<path d="M16 76 Q 16 12 60 12 Q 104 12 104 76" stroke="#1b1e24" stroke-width="12" fill="none" stroke-linecap="round"/>
+      <path d="M16 76 Q 16 12 60 12 Q 104 12 104 76" stroke="#d9dde4" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <circle cx="16" cy="80" r="19" fill="#fff"/><circle cx="104" cy="80" r="19" fill="#fff"/>
+      <circle cx="16" cy="80" r="13" fill="#d7192e"/><circle cx="104" cy="80" r="13" fill="#d7192e"/>
+      <circle cx="12" cy="75" r="4" fill="#ff7a8a"/><circle cx="100" cy="75" r="4" fill="#ff7a8a"/>` },
   };
-  const AUTO_HATS = ['santa', 'elf', 'beanie', 'antlers', 'tophat', 'tree'];
-  function hatFor(p) {
-    let h = p && p.hat;
-    if (h === 'none') return null;
-    if (!HATS[h]) {
-      let n = 0;
-      for (const ch of String(p && p.id)) n = (n * 31 + ch.charCodeAt(0)) >>> 0;
-      h = AUTO_HATS[n % AUTO_HATS.length];
+  // default hats are handed out in player order so everyone gets a different one
+  const AUTO_HATS = ['santa', 'elf', 'antlers', 'beanie', 'tophat', 'tree', 'wreath', 'bow', 'earmuffs', 'halo', 'crown'];
+  /** Give every "auto" player a hat nobody else is wearing (call before rendering a player list). */
+  function assignHats(players) {
+    const used = new Set(players.map((p) => p.hat).filter((h) => HATS[h]));
+    let i = 0;
+    for (const p of players) {
+      if (HATS[p.hat] || p.hat === 'none') { p.shownHat = p.hat; continue; }
+      let h = null;
+      for (; i < AUTO_HATS.length * 2 && !h; i++) {
+        const cand = AUTO_HATS[i % AUTO_HATS.length];
+        if (!used.has(cand) || i >= AUTO_HATS.length) h = cand;
+      }
+      p.shownHat = h || 'santa';
+      used.add(p.shownHat);
     }
+    return players;
+  }
+  function hatFor(p) {
+    const h = p && (p.shownHat || p.hat);
+    if (!h || h === 'none' || !HATS[h]) return null;
     return h;
   }
   /** SVG markup for a player's hat (only visible with the Christmas theme). */
@@ -250,5 +280,5 @@
     document.body.classList.toggle('theme-christmas', theme === 'christmas');
   }
 
-  window.PT = { HATS, hatHTML, results, resultsHTML, snow, applyTheme, useCurrency, esc, fmtNum, fmtShort, fmtMoney, fmtClock, ordinal, colorFor, initials, avatarHTML, chipHTML, seatPositions, blindsText, connect, toast };
+  window.PT = { HATS, hatHTML, assignHats, results, resultsHTML, snow, applyTheme, useCurrency, esc, fmtNum, fmtShort, fmtMoney, fmtClock, ordinal, colorFor, initials, avatarHTML, chipHTML, seatPositions, blindsText, connect, toast };
 })();

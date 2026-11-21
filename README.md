@@ -89,6 +89,8 @@ Seat moves animate on the TV and can be undone. Tap **✓ Done** when finished.
 - **Players**: add names and **upload photos** (click the photo circle). Photos are resized automatically.
 - **Chips**: values, colours and **chip photos** shown on the TV.
 
+**⭐ Save as my default** stores your settings, players, photos and hats. If there's no saved game, for example after a fresh install, the app starts from your default. **↺ Load my default** brings it back into the form any time.
+
 **Save changes** applies settings live without losing progress, so you can add a late player or tweak blinds mid-game. **Start new tournament** resets the clock and all eliminations, rebuys and add-ons, and keeps players and settings.
 
 Everything is saved (state + uploaded images) to `~/Poker Tournament Data` when started with the launcher, or `data/` with `npm start`. A restart or crash picks up where you left off, paused.

@@ -148,7 +148,7 @@
     const num = fmtMoney(d.prizePool, '');
     const unit = `<span class="unit">${esc(cur)}</span>`;
     $('pool').innerHTML = /^[a-z.]+$/i.test(cur) ? `${num} ${unit}` : unit + num;
-    fitText($('pool'), 128, 56);
+    fitText($('pool'), 128, 40);
     $('pool-sub').textContent = `${d.entries} ${d.entries === 1 ? 'entry' : 'entries'}`
       + (d.rebuys ? ` · ${d.rebuys} rebuy${d.rebuys > 1 ? 's' : ''}` : '')
       + (d.addons ? ` · ${d.addons} add-on${d.addons > 1 ? 's' : ''}` : '');
@@ -156,7 +156,7 @@
     s.players.forEach((p) => { if (p.place) placeName[p.place] = p.name; });
     const pays = d.payouts.slice(0, 9);
     $('payouts').innerHTML = pays.map((p) => `
-      <li><span class="pl">${ordinal(p.place)}</span><span class="who">${esc(placeName[p.place] || '')}</span><span class="amt tnum">${fmtMoney(p.amount, cur)}</span></li>`).join('')
+      <li><span class="pl">${ordinal(p.place)}</span><span class="who">${esc(placeName[p.place] || '')}</span><span class="pct tnum">${+p.pct.toFixed(1)}%</span><span class="amt tnum">${fmtMoney(p.amount, cur)}</span></li>`).join('')
       + (d.payouts.length > 9 ? `<li><span class="pl">+${d.payouts.length - 9}</span><span class="who"></span><span class="amt">more</span></li>` : '');
     const stats = [
       ['PLAYERS', `${d.activeCount}<small> / ${d.entries}</small>`],
@@ -180,7 +180,7 @@
   }
 
   function seatSig(p, isWinner, size) {
-    return [p.name, p.photo, p.hat, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
+    return [p.name, p.photo, p.hat, p.shownHat, p.status, p.rebuys, p.addons, p.place, isWinner, size].join('|');
   }
   function seatInner(p, isWinner, size) {
     const badges = (p.rebuys ? `<span class="badge r">R${p.rebuys > 1 ? '×' + p.rebuys : ''}</span>` : '')
@@ -193,6 +193,7 @@
   }
 
   function renderSeats(s) {
+    PT.assignHats(s.players);
     const n = s.config.seats;
     const players = s.players;
     $('empty').classList.toggle('hidden', players.length > 0);
@@ -265,7 +266,13 @@
   function fitText(el, max, min) {
     let size = max;
     el.style.fontSize = size + 'px';
-    while (size > min && el.scrollWidth > el.clientWidth + 1) {
+    // shrink until it fits the width, and the whole box (label, amount, subline) fits its height
+    const box = el.parentElement;
+    // measure only the text blocks (decorations like the holly may hang over the edge on purpose)
+    const first = box.querySelector('.k') || el;
+    const last = el.nextElementSibling || el;
+    const tooTall = () => first.offsetTop < 0 || last.offsetTop + last.offsetHeight > box.clientHeight;
+    while (size > min && (el.scrollWidth > el.clientWidth + 1 || tooTall())) {
       size -= 4;
       el.style.fontSize = size + 'px';
     }

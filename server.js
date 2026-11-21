@@ -50,7 +50,10 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       t.clock.anchor = now();
     }
   } catch {
-    t = engine.createTournament(engine.defaultConfig(), []);
+    // fresh install / no saved game: start from the host's saved default if there is one
+    let def = null;
+    try { def = JSON.parse(fs.readFileSync(path.join(dataDir, 'default.json'), 'utf8')); } catch { /* none */ }
+    t = def ? engine.createTournament(def.config, def.players, now()) : engine.createTournament(engine.defaultConfig(), []);
   }
   let saveTimer = null;
   const saveNow = () => {
@@ -118,6 +121,28 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       broadcast([{ type: reset ? 'reset' : 'setup' }]);
       saveNow();
       res.json({ ok: true, state: engine.publicState(t, now()) });
+    } catch (e) {
+      res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  const defaultFile = path.join(dataDir, 'default.json');
+  app.get('/api/default', (req, res) => {
+    try {
+      const def = JSON.parse(fs.readFileSync(defaultFile, 'utf8'));
+      res.json({ ok: true, config: engine.normalizeConfig(def.config), players: def.players || [] });
+    } catch {
+      res.status(404).json({ ok: false, error: 'No default saved yet' });
+    }
+  });
+  app.post('/api/default', (req, res) => {
+    const { config, players } = req.body || {};
+    try {
+      // keep it clean: settings + who plays (names, photos, hats), no game progress
+      const tmp = engine.createTournament(config, players, now());
+      const def = { savedAt: new Date().toISOString(), config: tmp.config, players: tmp.players.map(({ id, name, photo, hat }) => ({ id, name, photo, hat })) };
+      fs.writeFileSync(defaultFile, JSON.stringify(def, null, 2));
+      res.json({ ok: true });
     } catch (e) {
       res.status(400).json({ ok: false, error: e.message });
     }
