@@ -452,6 +452,8 @@
     if (confirm('Start a NEW tournament?\n\nThe clock goes back to level 1 and all eliminations, rebuys and add-ons are cleared. Players, photos and settings are kept.')) save(true);
   };
 
+  $('b-voice').onclick = () => PT.announcer.test(cfg.announcer);
+
   function renderAll() {
     bindFields();
     renderPreview();

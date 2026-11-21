@@ -61,6 +61,14 @@ The display is drawn at 1920×1080 and scales to fit any screen. The mouse curso
 - **⚙ (top right)** has shortcuts straight into Settings: players, blinds, prize pool, payouts, chips and seats. The Settings page has a 📱 button to get back.
 - Several phones can be used as remotes at the same time. Everything stays in sync.
 
+### Announcer & big moments
+The TV can announce things out loud in a **🎅 Santa voice** or a normal voice, in **English or Dansk**: new levels, breaks, the 1-minute warning, eliminations with prize money, rebuys, add-ons and the champion. Choose it in **Settings → General**, where **🔊 Hear the announcer** lets you test it. It uses the browser's built-in voices and plays after you click the TV once (the same click that turns on sound).
+
+The TV also marks the big moments:
+- **🫧 Bubble:** one more bust-out and everyone left is paid. A heartbeat plays and a pulsing badge shows at the top.
+- **In the money:** when the bubble bursts, gold coins rain down and the bubble boy is named.
+- **⚔ Heads up:** the last two players face off.
+
 ### Seats & waiting list
 Set the number of seats (2–12) in **Settings → General**. Players beyond that go on the **waiting list**, which shows at the bottom of the TV and below the table on the phone.
 

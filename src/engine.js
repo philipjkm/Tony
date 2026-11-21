@@ -34,6 +34,7 @@ function defaultConfig() {
     name: 'Friday Night Poker',
     currency: 'kr.',
     theme: 'classic',
+    announcer: { voice: 'santa', lang: 'en' },
     buyIn: 50,
     entryFee: 0,
     startingStack: 10000,
@@ -81,6 +82,10 @@ function normalizeConfig(input) {
     name: String(c.name ?? d.name).slice(0, 80) || 'Tournament',
     currency: String(c.currency ?? d.currency).slice(0, 4),
     theme: ['classic', 'christmas'].includes(c.theme) ? c.theme : 'classic',
+    announcer: {
+      voice: ['santa', 'normal', 'off'].includes(c.announcer && c.announcer.voice) ? c.announcer.voice : 'santa',
+      lang: ['en', 'da'].includes(c.announcer && c.announcer.lang) ? c.announcer.lang : 'en',
+    },
     buyIn: nonNeg(c.buyIn, d.buyIn),
     entryFee: nonNeg(c.entryFee, 0),
     startingStack: nonNeg(c.startingStack, d.startingStack),
@@ -290,6 +295,7 @@ function derive(t, now = Date.now()) {
   const paidPlaces = cfg.payouts.mode === 'percent' ? cfg.payouts.places.slice(0, Math.max(1, entries)) : cfg.payouts.places;
   const payouts = computePayouts({ ...cfg.payouts, places: paidPlaces }, prizePool);
 
+  const paidCount = payouts.filter((p) => p.amount > 0).length;
   const totalChips = cfg.startingStack * entries + cfg.rebuy.chips * rebuys + cfg.addon.chips * addons;
   const finished = entries > 1 && active.length === 1 && out.length > 0;
 
@@ -336,6 +342,11 @@ function derive(t, now = Date.now()) {
     nextBreakMs,
     finished,
     winnerId: finished ? active[0].id : null,
+    paidPlaces: paidCount,
+    // bubble: one more bust-out and everyone left is paid
+    bubble: !finished && entries > paidCount && active.length === paidCount + 1,
+    inTheMoney: !finished && entries > paidCount && active.length <= paidCount && active.length > 1,
+    headsUp: !finished && active.length === 2 && entries > 2,
     places,
     rebuyOpen: cfg.rebuy.enabled && (cfg.rebuy.lastLevel === 0 || levelNumber <= cfg.rebuy.lastLevel),
     addonOpen: cfg.addon.enabled && (cfg.addon.lastLevel === 0 || levelNumber <= cfg.addon.lastLevel),
@@ -410,8 +421,8 @@ function apply(t, action, now = Date.now()) {
         if (remainingNow(t, now) <= 0) throw new ActionError('Clock has ended — go to a level first');
         c.running = true;
         c.anchor = now;
+        events.push({ type: 'resumed', first: !t.startedAt });
         if (!t.startedAt) t.startedAt = now;
-        events.push({ type: 'resumed' });
       }
       break;
     case 'clock.pause':
@@ -458,7 +469,14 @@ function apply(t, action, now = Date.now()) {
       const after = derive(t, now);
       const prize = (after.payouts.find((x) => x.place === place) || {}).amount || 0;
       pushLog(t, { id: uid(), ts: now, type: 'eliminate', playerId: p.id, name: p.name, place, before });
-      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize });
+      const burstBubble = !d.inTheMoney && after.inTheMoney;
+      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize, burstBubble });
+      if (!d.bubble && after.bubble) events.push({ type: 'bubble', paidPlaces: after.paidPlaces });
+      if (burstBubble) events.push({ type: 'inTheMoney', bubbleBoy: p.name, paidPlaces: after.paidPlaces });
+      if (!d.headsUp && after.headsUp) {
+        const [a, b] = t.players.filter((x) => x.status === 'active');
+        events.push({ type: 'headsUp', a: { id: a.id, name: a.name, photo: a.photo }, b: { id: b.id, name: b.name, photo: b.photo } });
+      }
       if (after.finished) {
         const w = t.players.find((x) => x.id === after.winnerId);
         if (c.running) apply(t, { type: 'clock.pause' }, now);

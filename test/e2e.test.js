@@ -692,3 +692,117 @@ test('a refused action right at a level change still updates every screen', asyn
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-voice-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  // capture speech instead of playing it
+  const fakeSpeech = () => {
+    window.__said = [];
+    const fake = { speaking: false, speak(u) { window.__said.push({ text: u.text, pitch: u.pitch, rate: u.rate, lang: u.lang }); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; }, onvoiceschanged: null };
+    Object.defineProperty(window, 'speechSynthesis', { value: fake, configurable: true });
+  };
+  try {
+    const names = ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars'];
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] } }, players: names.map((name) => ({ name })) }) })).json();
+    const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
+    assert.deepEqual(r.state.config.announcer, { voice: 'santa', lang: 'en' }, 'Santa in English by default');
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    await display.addInitScript(fakeSpeech);
+    display.on('pageerror', (e) => errors.push(e.message));
+    await display.goto(base + '/display');
+    await display.waitForSelector('.seat');
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+    const act = (a) => c.emitWithAck('action', a);
+    const said = () => display.evaluate(() => window.__said.map((x) => x.text).join(' | '));
+    const waitSaid = (re) => display.waitForFunction((src) => new RegExp(src).test(window.__said.map((x) => x.text).join(' | ')), re.source);
+
+    await t.test('shuffle up and deal + level announcements in a deep Santa voice', async () => {
+      await act({ type: 'clock.start' });
+      await waitSaid(/Shuffle up and deal/);
+      await act({ type: 'clock.next' });
+      await waitSaid(/Level 2! The blinds are now 50 and 100/);
+      const u = await display.evaluate(() => window.__said[0]);
+      assert.ok(u.pitch < 0.7 && u.rate < 1, 'deep, slow Santa voice');
+    });
+
+    await t.test('bubble', async () => {
+      await act({ type: 'player.eliminate', playerId: ids.Lars });
+      await waitSaid(/Lars .* 5th place/);
+      await waitSaid(/on the bubble/);
+      await display.waitForFunction(() => document.getElementById('moment').textContent.includes('BUBBLE'));
+      await display.waitForFunction(() => /ON THE BUBBLE/.test(document.getElementById('spotlight').textContent), null, { timeout: 15000 });
+      await display.waitForTimeout(600);
+      await display.screenshot({ path: path.join(SHOTS, 'display-bubble.png') });
+    });
+
+    await t.test('bubble bursts → in the money', async () => {
+      await act({ type: 'player.eliminate', playerId: ids.Sofia });
+      await waitSaid(/Sofia bursts the bubble in 4th place/);
+      await display.waitForFunction(() => document.getElementById('moment').textContent.includes('IN THE MONEY'));
+      await display.waitForFunction(() => /IN THE MONEY[\s\S]*Sofia burst the bubble/.test(document.getElementById('spotlight').textContent), null, { timeout: 20000 });
+      await display.waitForTimeout(600);
+      await display.screenshot({ path: path.join(SHOTS, 'display-in-the-money.png') });
+    });
+
+    await t.test('heads up', async () => {
+      await act({ type: 'player.eliminate', playerId: ids.Jake });
+      await waitSaid(/Jake .* 3rd place.*100 kroner/);
+      await waitSaid(/Heads up! (Tony|Maria) versus (Tony|Maria)/);
+      await display.waitForFunction(() => document.getElementById('moment').textContent.includes('HEADS UP'));
+      await display.waitForFunction(() => /VS[\s\S]*HEADS UP/.test(document.getElementById('spotlight').textContent), null, { timeout: 20000 });
+      await display.waitForTimeout(600);
+      await display.screenshot({ path: path.join(SHOTS, 'display-heads-up.png') });
+    });
+
+    await t.test('champion', async () => {
+      await act({ type: 'player.eliminate', playerId: ids.Maria });
+      await waitSaid(/Merry Christmas, Tony! You are the champion, and win 250 kroner/);
+      await display.waitForFunction(() => document.getElementById('moment').classList.contains('hidden'));
+    });
+
+    await t.test('Danish, normal voice, and off', async () => {
+      await act({ type: 'undo' }); // back to heads up
+      const s0 = await (await fetch(base + '/api/state')).json();
+      const setCfg = (announcer) => fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { ...s0.config, announcer }, players: s0.players }) });
+      await setCfg({ voice: 'normal', lang: 'da' });
+      await display.waitForFunction(() => true);
+      await new Promise((res) => setTimeout(res, 300));
+      await act({ type: 'clock.next' });
+      await waitSaid(/Niveau 3\. Blinds er nu 75 og 150/);
+      const last = await display.evaluate(() => window.__said[window.__said.length - 1]);
+      assert.equal(last.lang, 'da-DK');
+      assert.equal(last.pitch, 1);
+      await setCfg({ voice: 'off', lang: 'en' });
+      await new Promise((res) => setTimeout(res, 300));
+      const before = (await said()).length;
+      await act({ type: 'clock.next' });
+      await new Promise((res) => setTimeout(res, 500));
+      assert.equal((await said()).length, before, 'silent when off');
+    });
+
+    await t.test('"Hear the announcer" button in Settings', async () => {
+      const setup = await browser.newPage();
+      await setup.addInitScript(fakeSpeech);
+      await setup.goto(base + '/setup');
+      await setup.waitForSelector('#lv-rows .lv-row');
+      await setup.selectOption('[data-k="announcer.voice"]', 'santa');
+      await setup.click('#b-voice');
+      await setup.waitForFunction(() => window.__said.some((x) => /Santa will be your announcer/.test(x.text)));
+      await setup.close();
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

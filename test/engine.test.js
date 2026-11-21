@@ -307,3 +307,37 @@ test('undo after a settings change keeps the settings (seats, removed and late p
   E.apply(t, { type: 'undo' }, T0); // undoes p1 → seat 5, which no longer exists
   assert.ok(t.players.every((p) => p.seat === null || p.seat < 4), 'no one in a seat that no longer exists');
 });
+
+test('bubble, in the money and heads-up moments', () => {
+  const t = make(5, { buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] } });
+  assert.equal(E.derive(t, T0).bubble, false);
+  let r = E.apply(t, { type: 'player.eliminate', playerId: 'p1' }, T0 + 1);
+  assert.ok(r.events.some((e) => e.type === 'bubble'), 'now on the bubble (4 left, 3 paid)');
+  assert.equal(E.derive(t, T0 + 1).bubble, true);
+  r = E.apply(t, { type: 'player.eliminate', playerId: 'p2' }, T0 + 2);
+  const out = r.events.find((e) => e.type === 'eliminated');
+  assert.equal(out.burstBubble, true);
+  assert.equal(out.prize, 0, 'the bubble boy wins nothing');
+  assert.equal(r.events.find((e) => e.type === 'inTheMoney').bubbleBoy, 'Player 2');
+  const d = E.derive(t, T0 + 2);
+  assert.equal(d.bubble, false);
+  assert.equal(d.inTheMoney, true);
+  r = E.apply(t, { type: 'player.eliminate', playerId: 'p3' }, T0 + 3);
+  assert.ok(r.events.some((e) => e.type === 'headsUp'));
+  assert.ok(!r.events.some((e) => e.type === 'bubble'));
+  // undo the bubble burst → back on the bubble
+  E.apply(t, { type: 'undo' }, T0 + 4);
+  E.apply(t, { type: 'undo' }, T0 + 4);
+  assert.equal(E.derive(t, T0 + 4).bubble, true);
+  // when everyone is paid there is no bubble
+  const t2 = make(3, { payouts: { mode: 'percent', places: [50, 30, 20] } });
+  assert.equal(E.derive(t2, T0).bubble, false);
+  assert.ok(!E.apply(t2, { type: 'player.eliminate', playerId: 'p1' }, T0).events.some((e) => e.type === 'bubble' || e.type === 'inTheMoney'));
+});
+
+test('first start is flagged (for "shuffle up and deal")', () => {
+  const t = make(3);
+  assert.equal(E.apply(t, { type: 'clock.start' }, T0).events[0].first, true);
+  E.apply(t, { type: 'clock.pause' }, T0 + 1);
+  assert.equal(E.apply(t, { type: 'clock.start' }, T0 + 2).events[0].first, false);
+});

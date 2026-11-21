@@ -64,6 +64,9 @@
       [2637, 3520, 5274, 7040].forEach((f, i) => tone(f, 0.09, 1.1 - i * 0.2, 'sine', 0.14 / (i + 1)));
       for (let i = 0; i < 6; i++) tone(3800 + Math.random() * 3200, 0.16 + i * 0.045, 0.07, 'triangle', 0.035);
     },
+    // sleigh bells before Santa speaks
+    jingle: () => { for (let i = 0; i < 9; i++) { tone(2400 + Math.random() * 1600, i * 0.06, 0.12, 'triangle', 0.035); tone(5200 + Math.random() * 900, i * 0.06 + 0.02, 0.08, 'sine', 0.02); } },
+    heartbeat: () => { [0, 0.22, 0.9, 1.12, 1.8, 2.02].forEach((t, i) => tone(i % 2 ? 50 : 62, t, 0.18, 'sine', 0.5)); },
     win: () => { [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, i * 0.16, 0.4, 'triangle', 0.15)); },
   };
 
@@ -118,6 +121,11 @@
     document.body.dataset.seq = s.seq; // lets tests see which update the screen is showing
     PT.useCurrency(cfg.currency);
     PT.applyTheme(cfg.theme);
+    PT.announcer.configure(cfg.announcer);
+    const mo = $('moment');
+    const moment = d.headsUp ? ['duel', '⚔ HEADS UP'] : d.bubble ? ['bubble', '🫧 BUBBLE'] : d.inTheMoney ? ['money', (cfg.theme === 'christmas' ? '🎁' : '🏆') + ' IN THE MONEY'] : null;
+    mo.classList.toggle('hidden', !moment);
+    if (moment) { mo.className = 'moment ' + moment[0]; mo.textContent = moment[1]; }
     const cur = cfg.currency;
     document.title = cfg.name + ' · Live';
     const isBreak = d.level.type === 'break';
@@ -314,7 +322,7 @@
     t.textContent = fmtClock(rem);
     const warn = d.running && rem <= 60000 && d.level.type !== 'break';
     t.classList.toggle('warn', warn);
-    if (warn && !warned && rem > 55000) { sounds.warn(); }
+    if (warn && !warned && rem > 55000) { sounds.warn(); PT.announcer.handle({ type: 'minute' }, s); }
     warned = warn;
     $('progress').style.width = (100 * (1 - rem / d.levelDurationMs)).toFixed(2) + '%';
     const nb = document.getElementById('next-break');
@@ -365,7 +373,10 @@
     el['t_' + cls] = setTimeout(() => el.classList.remove(cls), 1400);
   }
 
+  PT.announcer.onBeforeSpeak(() => sounds.jingle());
+
   function handleEvent(e) {
+    PT.announcer.handle(e, live.state);
     const s = live.state;
     const cur = s ? s.config.currency : '$';
     switch (e.type) {
@@ -398,6 +409,30 @@
         spotlight(`<div class="spot addon"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">ADD-ON</div><div class="nm">${esc(e.name)}</div>
           <div class="sub">${s ? '+' + fmtNum(s.config.addon.chips) + ' chips' : ''}</div></div>`, 2800);
+        break;
+      case 'bubble':
+        sounds.heartbeat();
+        spotlight(`<div class="spot bubble"><div class="big">🫧</div>
+          <div class="tag">ON THE BUBBLE</div><div class="nm">One more out…</div>
+          <div class="sub">…and everyone left is in the money</div></div>`, 5000);
+        break;
+      case 'inTheMoney': {
+        sounds.win();
+        let coins = '';
+        for (let i = 0; i < 40; i++) coins += `<i class="coin" style="left:${Math.random() * 100}%;animation-duration:${2 + Math.random() * 2.5}s;animation-delay:${-Math.random() * 3}s">🪙</i>`;
+        const icon = s && s.config.theme === 'christmas' ? '🎁' : '🏆';
+        spotlight(`${coins}<div class="spot money"><div class="big">${icon}</div>
+          <div class="tag">IN THE MONEY</div><div class="nm">Everyone gets paid!</div>
+          <div class="sub">${esc(e.bubbleBoy)} burst the bubble</div></div>`, 5500);
+        break;
+      }
+      case 'headsUp':
+        sounds.heartbeat();
+        spotlight(`<div class="spot duel"><div class="vs">
+            <div><div class="ring">${avatarHTML(e.a, 230)}</div><div class="nm2">${esc(e.a.name)}</div></div>
+            <div class="vs-x">VS</div>
+            <div><div class="ring">${avatarHTML(e.b, 230)}</div><div class="nm2">${esc(e.b.name)}</div></div></div>
+          <div class="tag">HEADS UP</div></div>`, 5000);
         break;
       case 'winner':
         sounds.win();

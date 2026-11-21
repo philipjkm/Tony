@@ -175,7 +175,7 @@ html, body.display { width: 100%; height: 100%; overflow: hidden; background: #0
 
 .spotlight {
   position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; pointer-events: none;
-  background: radial-gradient(circle at 50% 45%, rgba(0,0,0,.55), rgba(0,0,0,.92));
+  background: radial-gradient(circle at 50% 45%, rgba(4,6,9,.86), rgba(0,0,0,.96));
   opacity: 0; transition: opacity .4s;
 }
 .spotlight.show { opacity: 1; }
@@ -312,3 +312,23 @@ body.display.cursor-hidden, body.display.cursor-hidden * { cursor: none; }
 .results .net.neg { color: #ff6b7f; }
 .results tfoot td { border-top: 2px solid var(--line-2); color: var(--muted); font-size: 22px; }
 .results tfoot small { font-size: 18px; }
+
+/* bubble / in the money / heads up */
+.moment { padding: 10px 18px; border-radius: 999px; font-weight: 900; font-size: 20px; letter-spacing: .14em; white-space: nowrap; }
+.moment.bubble { background: rgba(229,23,63,.18); color: #ff8a9a; border: 1px solid rgba(229,23,63,.6); animation: pulse 1.1s infinite; }
+.moment.money { background: rgba(246,196,83,.16); color: var(--gold-2); border: 1px solid rgba(246,196,83,.55); }
+.moment.duel { background: rgba(47,140,255,.16); color: #9cc8ff; border: 1px solid rgba(47,140,255,.55); }
+.spot .big { font-size: 190px; line-height: 1; filter: drop-shadow(0 10px 30px rgba(0,0,0,.6)); }
+.spot.bubble .big { animation: wobble 1.2s ease-in-out infinite; }
+@keyframes wobble { 50% { transform: scale(1.08, .94); } }
+.spot.bubble .tag { color: #ff8a9a; }
+.spot.money .tag { color: var(--gold); }
+.spot.money .nm { background: linear-gradient(180deg, #fff3cf, var(--gold)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.spot.duel .vs { display: flex; align-items: center; gap: 70px; }
+.spot.duel .ring { background: conic-gradient(var(--blue), #0b3f8a, var(--blue)); box-shadow: 0 0 90px rgba(47,140,255,.5); }
+.spot.duel .nm2 { font-size: 54px; font-weight: 900; margin-top: 18px; }
+.spot.duel .vs-x { font-size: 110px; font-weight: 900; color: var(--red-2); text-shadow: 0 0 40px var(--red-glow); }
+.spot.duel .tag { color: #9cc8ff; }
+.coin { position: absolute; top: -60px; font-size: 46px; animation: fall linear infinite; font-style: normal; }
+.spotlight .coin { z-index: 0; opacity: .85; }
+.spotlight .spot { position: relative; z-index: 1; }
