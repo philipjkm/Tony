@@ -69,6 +69,15 @@ The TV also marks the big moments:
 - **In the money:** when the bubble bursts, gold coins rain down and the bubble boy is named.
 - **⚔ Heads up:** the last two players face off.
 
+### Real Santa voice (optional, ElevenLabs)
+For a realistic Santa instead of the robotic built-in voice:
+1. Create a free account at elevenlabs.io and make an API key with **Text to Speech** and **Voices** (read and write) access.
+2. In **Settings → 🎅 Real Santa voice**, paste the key and press **Connect**.
+3. Search the voice library, play samples and press **Use this voice**.
+4. Optionally press **🎁 Prepare tonight's lines** to make level, break and rebuy lines in advance.
+
+Each line is made once and saved in `~/Poker Tournament Data/tts`, so repeats are free. The key stays on your Mac in `voice.json` and is never sent to the TV or phones. If ElevenLabs can't be reached, the built-in voice takes over. A typical night uses about 5,000–10,000 characters; check your ElevenLabs plan's monthly allowance.
+
 ### Seats & waiting list
 Set the number of seats (2–12) in **Settings → General**. Players beyond that go on the **waiting list**, which shows at the bottom of the TV and below the table on the phone.
 

@@ -121,7 +121,7 @@
     document.body.dataset.seq = s.seq; // lets tests see which update the screen is showing
     PT.useCurrency(cfg.currency);
     PT.applyTheme(cfg.theme);
-    PT.announcer.configure(cfg.announcer);
+    PT.announcer.configure(cfg.announcer, s.voice);
     const mo = $('moment');
     const moment = d.headsUp ? ['duel', '⚔ HEADS UP'] : d.bubble ? ['bubble', '🫧 BUBBLE'] : d.inTheMoney ? ['money', (cfg.theme === 'christmas' ? '🎁' : '🏆') + ' IN THE MONEY'] : null;
     mo.classList.toggle('hidden', !moment);

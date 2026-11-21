@@ -476,6 +476,86 @@
     toast('Default loaded — press Start new tournament (or Save) to use it');
   };
 
+  /* ---- real Santa voice (ElevenLabs) ---- */
+  let voiceStatus = { ready: false };
+  const svNote = (id, msg, cls) => { const el = $(id); el.textContent = msg; el.className = 'sv-note ' + (cls || ''); };
+  const vjson = (url, opts) => fetch(url, opts).then((r) => r.json()).catch(() => ({ ok: false, error: 'Could not reach the app' }));
+  function showVoice(st) {
+    voiceStatus = st || voiceStatus;
+    PT.announcer.configure(cfg && cfg.announcer, voiceStatus);
+    $('sv-status').textContent = voiceStatus.ready ? `✓ Using "${voiceStatus.voiceName}"` : voiceStatus.keySet ? '— connected, pick a voice' : '— not connected';
+    $('sv-status').className = voiceStatus.ready ? 'ok' : '';
+    $('sv-key').placeholder = voiceStatus.keySet ? `Connected (${voiceStatus.keyHint}) — paste a new key to replace` : 'Paste your ElevenLabs API key';
+    $('sv-remove').classList.toggle('hidden', !voiceStatus.keySet);
+    document.querySelectorAll('.sv-voice').forEach((el) => el.classList.toggle('on', el.dataset.name === voiceStatus.voiceName));
+  }
+  vjson('/api/voice').then((r) => r.ok && showVoice(r.status));
+  $('sv-key-save').onclick = async () => {
+    const apiKey = $('sv-key').value.trim();
+    if (!apiKey) return svNote('sv-key-note', 'Paste the key first', 'err');
+    svNote('sv-key-note', 'Checking the key…');
+    const r = await vjson('/api/voice/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey }) });
+    if (!r.ok) return svNote('sv-key-note', r.error, 'err');
+    $('sv-key').value = '';
+    showVoice(r.status);
+    svNote('sv-key-note', '✓ Connected to ElevenLabs. Now pick a Santa voice below.', 'ok');
+    $('sv-search').click();
+  };
+  let previewAudio = null;
+  $('sv-search').onclick = async () => {
+    $('sv-results').innerHTML = '<div class="sv-note">Searching…</div>';
+    const r = await vjson('/api/voice/search?q=' + encodeURIComponent($('sv-q').value || 'santa'));
+    if (!r.ok) { $('sv-results').innerHTML = ''; return svNote('sv-key-note', r.error, 'err'); }
+    if (!r.voices.length) { $('sv-results').innerHTML = '<div class="sv-note">No voices found — try "santa", "father christmas" or "old man jolly".</div>'; return; }
+    $('sv-results').innerHTML = r.voices.map((v, i) => `<div class="sv-voice" data-i="${i}" data-name="${esc(v.name)}">
+      <span class="nm">${esc(v.name)}</span>
+      <span class="ds">${esc(v.description || [v.accent, v.language].filter(Boolean).join(' · '))}</span>
+      ${v.freeUsersAllowed ? '' : '<span class="tag">Paid ElevenLabs plans only</span>'}
+      <div class="acts">${v.previewUrl ? `<button type="button" class="btn" data-play="${i}">▶ Sample</button>` : ''}<button type="button" class="btn btn-red" data-use="${i}">Use this voice</button></div></div>`).join('');
+    $('sv-results').onclick = async (e) => {
+      const play = e.target.dataset.play;
+      const use = e.target.dataset.use;
+      if (play !== undefined) {
+        if (previewAudio) previewAudio.pause();
+        previewAudio = new Audio(r.voices[play].previewUrl);
+        previewAudio.play().catch(() => toast('Could not play the sample', { error: true }));
+      }
+      if (use !== undefined) {
+        e.target.disabled = true;
+        const u = await vjson('/api/voice/use', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(r.voices[use]) });
+        e.target.disabled = false;
+        if (!u.ok) return toast(u.error, { error: true });
+        showVoice(u.status);
+        toast(`🎅 "${u.status.voiceName}" is now your announcer`);
+        if (cfg.announcer.voice !== 'santa') { cfg.announcer.voice = 'santa'; bindFields(); setDirty(true); }
+      }
+    };
+    showVoice();
+  };
+  $('sv-hear').onclick = () => {
+    if (!voiceStatus.ready) toast('Using the built-in voice — connect ElevenLabs and pick a voice for the real Santa');
+    PT.announcer.test({ voice: 'santa', lang: cfg.announcer.lang });
+  };
+  $('sv-prepare').onclick = async () => {
+    if (!voiceStatus.ready) return svNote('sv-prep', 'Connect ElevenLabs and pick a voice first.', 'err');
+    const lines = PT.announcer.fixedLines({ config: cfg, players }, { lang: cfg.announcer.lang });
+    const chars = lines.reduce((n, l) => n + l.length, 0);
+    if (!confirm(`Prepare ${lines.length} lines (about ${chars.toLocaleString()} characters of your ElevenLabs allowance)?\n\nLines already made are skipped and cost nothing.`)) return;
+    let made = 0, cached = 0;
+    for (let i = 0; i < lines.length; i += 5) {
+      svNote('sv-prep', `Preparing… ${Math.min(i, lines.length)} / ${lines.length}`);
+      const r = await vjson('/api/voice/prepare', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ texts: lines.slice(i, i + 5) }) });
+      if (!r.ok || r.failed.length) return svNote('sv-prep', 'Stopped: ' + (r.error || r.failed[0]), 'err');
+      made += r.made; cached += r.cached;
+    }
+    svNote('sv-prep', `✓ Ready: ${lines.length} lines (${made} new, ${cached} already saved).`, 'ok');
+  };
+  $('sv-remove').onclick = async () => {
+    if (!confirm('Disconnect ElevenLabs? The built-in voice will be used.')) return;
+    const r = await vjson('/api/voice/key', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ apiKey: '' }) });
+    if (r.ok) { showVoice(r.status); $('sv-results').innerHTML = ''; }
+  };
+
   function renderAll() {
     bindFields();
     renderPreview();

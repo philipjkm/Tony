@@ -908,3 +908,158 @@ test('9 different hats, payout % on TV, payouts changed mid-game from the phone,
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, play on TV, fallback', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const express = require('express');
+  const { io } = require('socket.io-client');
+  // a tiny valid WAV so the browser can actually play the "clip"
+  const wav = (() => {
+    const rate = 8000, n = 2400, b = Buffer.alloc(44 + n * 2);
+    b.write('RIFF', 0); b.writeUInt32LE(36 + n * 2, 4); b.write('WAVEfmt ', 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22);
+    b.writeUInt32LE(rate, 24); b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write('data', 36); b.writeUInt32LE(n * 2, 40);
+    for (let i = 0; i < n; i++) b.writeInt16LE(Math.round(Math.sin(i / 8) * 3000), 44 + i * 2);
+    return b;
+  })();
+  const calls = [];
+  let ttsFails = false;
+  const mock = express();
+  mock.use(express.json());
+  const auth = (req, res, next) => (req.get('xi-api-key') === 'good-key' ? next() : res.status(401).json({ detail: { status: 'invalid_api_key', message: 'Invalid API key' } }));
+  mock.get('/v1/voices', auth, (req, res) => res.json({ voices: [{ voice_id: 'mine1', name: 'My voice' }] }));
+  mock.get('/v1/shared-voices', auth, (req, res) => {
+    calls.push({ kind: 'search', q: req.query.search, page_size: req.query.page_size });
+    res.json({ has_more: false, voices: [
+      { public_owner_id: 'own1', voice_id: 'lib1', name: 'Santa Claus', description: 'Jolly old Saint Nick', preview_url: `http://127.0.0.1:${mockPort}/preview.wav`, free_users_allowed: true },
+      { public_owner_id: 'own2', voice_id: 'lib2', name: 'Father Christmas', description: 'British Santa', preview_url: '', free_users_allowed: false },
+    ] });
+  });
+  mock.post('/v1/voices/add/:owner/:voice', auth, (req, res) => { calls.push({ kind: 'add', owner: req.params.owner, voice: req.params.voice, new_name: req.body.new_name }); res.json({ voice_id: 'added1' }); });
+  mock.post('/v1/text-to-speech/:voice', auth, (req, res) => {
+    calls.push({ kind: 'tts', voice: req.params.voice, format: req.query.output_format, ...req.body });
+    if (ttsFails) return res.status(500).json({ detail: 'boom' });
+    res.type('audio/wav').send(wav);
+  });
+  mock.get('/preview.wav', (req, res) => res.type('audio/wav').send(wav));
+  const mockServer = await new Promise((r) => { const s = mock.listen(0, () => r(s)); });
+  const mockPort = mockServer.address().port;
+
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-santa-'));
+  const app = createApp({ dataDir, port: 0, log: () => {}, elevenLabsUrl: `http://127.0.0.1:${mockPort}` });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  const tts = () => calls.filter((x) => x.kind === 'tts');
+  const spy = () => {
+    window.__played = []; window.__said = [];
+    const orig = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () { window.__played.push(decodeURIComponent(this.src)); return orig.call(this); };
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
+  };
+  try {
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, levels: [{ type: 'level', sb: 25, bb: 50, ante: 0, minutes: 15 }, { type: 'level', sb: 50, bb: 100, ante: 0, minutes: 15 }, { type: 'break', minutes: 10, label: 'Break' }] }, players: ['Tony', 'Maria', 'Jake', 'Sofia'].map((name) => ({ name })) }) })).json();
+    const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
+    const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await setup.addInitScript(spy);
+    setup.on('pageerror', (e) => errors.push(e.message));
+    setup.on('dialog', (d) => d.accept());
+    await setup.goto(base + '/setup#santa');
+    await setup.waitForSelector('#sv-status');
+
+    await t.test('a wrong key is refused with a clear message', async () => {
+      await setup.fill('#sv-key', 'bad-key');
+      await setup.click('#sv-key-save');
+      await setup.waitForFunction(() => /did not accept the API key/.test(document.getElementById('sv-key-note').textContent));
+    });
+
+    await t.test('connect, search Santa voices, use one', async () => {
+      await setup.fill('#sv-key', 'good-key');
+      await setup.click('#sv-key-save');
+      await setup.waitForSelector('.sv-voice');
+      assert.equal(await setup.locator('.sv-voice').count(), 2);
+      assert.match(await setup.textContent('.sv-voice[data-i="1"]'), /Paid ElevenLabs plans only/);
+      assert.equal(calls.find((x) => x.kind === 'search').q, 'santa claus');
+      await setup.click('[data-use="0"]');
+      await setup.waitForFunction(() => /Using "Santa Claus"/.test(document.getElementById('sv-status').textContent));
+      assert.deepEqual(calls.find((x) => x.kind === 'add'), { kind: 'add', owner: 'own1', voice: 'lib1', new_name: 'Santa Claus' });
+      await setup.locator('#santa').screenshot({ path: path.join(SHOTS, 'settings-santa-voice.png') });
+    });
+
+    await t.test('the API key never leaves this computer', async () => {
+      const st = await (await fetch(base + '/api/state')).text();
+      const v = await (await fetch(base + '/api/voice')).text();
+      assert.ok(!st.includes('good-key') && !v.includes('good-key'));
+      assert.match(v, /••••-key/);
+      assert.equal(JSON.parse(st).voice.ready, true);
+      assert.equal(JSON.parse(fs.readFileSync(path.join(dataDir, 'voice.json'), 'utf8')).apiKey, 'good-key');
+    });
+
+    await t.test('Hear Santa makes a real ElevenLabs request', async () => {
+      await setup.click('#sv-hear');
+      await setup.waitForFunction(() => window.__played.some((s) => /Santa will be your announcer/.test(s)));
+      const call = tts()[0];
+      assert.equal(call.voice, 'added1');
+      assert.equal(call.model_id, 'eleven_multilingual_v2');
+      assert.equal(call.format, 'mp3_44100_128');
+      assert.match(call.text, /Ho ho ho! Merry Christmas! Santa will be your announcer tonight\./);
+      assert.ok(call.voice_settings && call.voice_settings.stability > 0);
+      assert.deepEqual(await setup.evaluate(() => window.__said), [], 'no robot voice');
+    });
+
+    await t.test('prepare lines ahead; second time everything is cached', async () => {
+      const before = tts().length;
+      await setup.click('#sv-prepare');
+      await setup.waitForFunction(() => /✓ Ready/.test(document.getElementById('sv-prep').textContent), null, { timeout: 30000 });
+      const made = tts().length - before;
+      assert.ok(made >= 10, `made ${made} lines`);
+      assert.ok(tts().some((x) => /Level 2! The blinds are now 50 and 100/.test(x.text)));
+      assert.ok(tts().some((x) => /Maria buys back in/.test(x.text)));
+      await setup.click('#sv-prepare');
+      await setup.waitForFunction(() => /0 new/.test(document.getElementById('sv-prep').textContent), null, { timeout: 30000 });
+      assert.equal(tts().length - before, made, 'nothing paid for twice');
+    });
+
+    const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    await display.addInitScript(spy);
+    display.on('pageerror', (e) => errors.push(e.message));
+    await display.goto(base + '/display');
+    await display.waitForSelector('.seat');
+    await display.click('body');
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+
+    await t.test('TV plays Santa clips: prepared lines from cache, new lines generated', async () => {
+      const before = tts().length;
+      await c.emitWithAck('action', { type: 'clock.start' });
+      await display.waitForFunction(() => window.__played.some((s) => /Shuffle up and deal/.test(s)));
+      assert.equal(tts().length, before, 'start line came from the cache');
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: ids.Sofia });
+      await display.waitForFunction(() => window.__played.some((s) => /Sofia/.test(s)), null, { timeout: 15000 });
+      assert.ok(tts().some((x) => /Sofia/.test(x.text)), 'new line generated');
+      assert.deepEqual(await display.evaluate(() => window.__said), [], 'no robot voice used');
+    });
+
+    await t.test('if ElevenLabs fails, the built-in voice says it instead', async () => {
+      ttsFails = true;
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: ids.Jake });
+      await display.waitForFunction(() => window.__said.some((s) => /Jake/.test(s)), null, { timeout: 20000 });
+      ttsFails = false;
+    });
+
+    await t.test('Danish lines go to the same Santa voice', async () => {
+      const s0 = await (await fetch(base + '/api/state')).json();
+      await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { ...s0.config, announcer: { voice: 'santa', lang: 'da' } }, players: s0.players }) });
+      await new Promise((res) => setTimeout(res, 300));
+      await c.emitWithAck('action', { type: 'clock.next' });
+      await display.waitForFunction(() => window.__played.some((s) => /Niveau 2! Blinds er nu 50 og 100/.test(s)), null, { timeout: 15000 });
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    mockServer.close();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

@@ -9,6 +9,7 @@ const multer = require('multer');
 const QRCode = require('qrcode');
 const { Server } = require('socket.io');
 const engine = require('./src/engine');
+const { createVoice } = require('./src/voice');
 
 function lanAddresses() {
   const out = [];
@@ -26,7 +27,7 @@ const WALL0 = Date.now();
 const PERF0 = performance.now();
 const monotonicNow = () => WALL0 + (performance.now() - PERF0);
 
-function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs = 250, log = console.log, now = monotonicNow } = {}) {
+function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs = 250, log = console.log, now = monotonicNow, elevenLabsUrl = process.env.ELEVENLABS_URL || 'https://api.elevenlabs.io' } = {}) {
   const uploadsDir = path.join(dataDir, 'uploads');
   fs.mkdirSync(uploadsDir, { recursive: true });
   const stateFile = path.join(dataDir, 'state.json');
@@ -82,14 +83,18 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
   app.use('/uploads', express.static(uploadsDir, { maxAge: '7d', immutable: true }));
   app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'] }));
 
+  const voice = createVoice({ dataDir, baseUrl: elevenLabsUrl, log });
+  // what clients see: game state + whether the real Santa voice is ready (never the API key)
+  const pub = () => ({ ...engine.publicState(t, now()), voice: { ready: voice.status().ready, name: voice.status().voiceName } });
+
   const broadcast = (events = []) => {
-    const state = engine.publicState(t, now());
+    const state = pub();
     io.emit('state', state);
     for (const e of events) io.emit('event', e);
     save();
   };
 
-  app.get('/api/state', (req, res) => res.json(engine.publicState(t, now())));
+  app.get('/api/state', (req, res) => res.json(pub()));
 
   app.get('/api/info', (req, res) => {
     const actualPort = server.address() ? server.address().port : port;
@@ -120,9 +125,42 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       else engine.updateSetup(t, config, players, now());
       broadcast([{ type: reset ? 'reset' : 'setup' }]);
       saveNow();
-      res.json({ ok: true, state: engine.publicState(t, now()) });
+      res.json({ ok: true, state: pub() });
     } catch (e) {
       res.status(400).json({ ok: false, error: e.message });
+    }
+  });
+
+  /* ---------- real Santa voice (ElevenLabs) ---------- */
+  const voiceRoute = (fn) => async (req, res) => {
+    try {
+      res.json({ ok: true, ...(await fn(req)) });
+    } catch (e) {
+      res.status(e.status === 401 ? 401 : 400).json({ ok: false, error: e.message });
+    }
+  };
+  const announceVoice = () => io.emit('state', pub());
+  app.get('/api/voice', voiceRoute(async () => ({ status: voice.status() })));
+  app.post('/api/voice/key', voiceRoute(async (req) => { const st = await voice.setKey(req.body && req.body.apiKey); announceVoice(); return { status: st }; }));
+  app.get('/api/voice/search', voiceRoute(async (req) => ({ voices: await voice.search(req.query.q) })));
+  app.get('/api/voice/mine', voiceRoute(async () => ({ voices: await voice.myVoices() })));
+  app.post('/api/voice/use', voiceRoute(async (req) => { const st = await voice.useVoice(req.body || {}); announceVoice(); return { status: st }; }));
+  app.post('/api/voice/prepare', voiceRoute(async (req) => {
+    const texts = Array.isArray(req.body && req.body.texts) ? req.body.texts.slice(0, 50) : [];
+    let made = 0, cached = 0;
+    const failed = [];
+    for (const text of texts) {
+      if (voice.isCached(text)) { cached++; continue; }
+      try { await voice.tts(text); made++; } catch (e) { failed.push(e.message); if (e.status === 401 || e.status === 402) break; }
+    }
+    return { made, cached, failed };
+  }));
+  app.get('/api/tts', async (req, res) => {
+    try {
+      const { file, type } = await voice.tts(req.query.text);
+      res.type(type).set('Cache-Control', 'public, max-age=31536000').sendFile(file);
+    } catch (e) {
+      res.status(502).json({ ok: false, error: e.message });
     }
   });
 
@@ -169,9 +207,9 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
 
   /* ---------- realtime ---------- */
   io.on('connection', (socket) => {
-    socket.emit('state', engine.publicState(t, now()));
+    socket.emit('state', pub());
     // clients ask for a fresh copy after waking up (phones pause their timers while asleep)
-    socket.on('sync', () => socket.emit('state', engine.publicState(t, now())));
+    socket.on('sync', () => socket.emit('state', pub()));
     socket.on('action', (action, ack) => {
       const reply = typeof ack === 'function' ? ack : () => {};
       // bring the clock up to date and announce any level change first, so a refused

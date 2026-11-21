@@ -89,6 +89,40 @@
   let cfg = { voice: 'santa', lang: 'en' };
   let beforeSpeak = null;
   let queued = 0;
+  let realVoice = false; // ElevenLabs Santa is set up on the server
+
+  /* ---------- real Santa voice: play server-made clips in order ---------- */
+  const clipQueue = [];
+  let clipPlaying = false;
+  function playClip(text, lang) {
+    if (clipQueue.length >= 4) clipQueue.splice(0, clipQueue.length - 3); // don't fall far behind
+    const audio = new Audio('/api/tts?text=' + encodeURIComponent(text));
+    audio.preload = 'auto'; // starts generating/downloading right away
+    clipQueue.push({ audio, text, lang });
+    nextClip();
+  }
+  function nextClip() {
+    if (clipPlaying) return;
+    const item = clipQueue.shift();
+    if (!item) return;
+    clipPlaying = true;
+    let done = false;
+    const finish = (fallback) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clipPlaying = false;
+      if (fallback) browserSay(item.text, { voice: 'santa', lang: item.lang });
+      nextClip();
+    };
+    // if the clip can't start within 12 s (no internet, ElevenLabs down…) use the built-in voice
+    const timer = setTimeout(() => { item.audio.pause(); finish(true); }, 12000);
+    item.audio.onended = () => finish(false);
+    item.audio.onerror = () => finish(true);
+    item.audio.onplaying = () => clearTimeout(timer);
+    if (beforeSpeak) beforeSpeak();
+    setTimeout(() => item.audio.play().catch(() => finish(true)), beforeSpeak ? 450 : 0);
+  }
 
   function synth() { return window.speechSynthesis || null; }
 
@@ -109,10 +143,18 @@
   }
 
   function say(text, opts = {}) {
-    const s = synth();
     const style = opts.voice || cfg.voice;
     const lang = opts.lang || cfg.lang;
-    if (!s || style === 'off' || !text) return;
+    if (style === 'off' || !text) return;
+    if (style === 'santa' && realVoice && !opts.browser) return playClip(text, lang);
+    browserSay(text, { voice: style, lang });
+  }
+
+  function browserSay(text, opts) {
+    const s = synth();
+    const style = opts.voice;
+    const lang = opts.lang;
+    if (!s || !text) return;
     // never build a long backlog: if things pile up, skip ahead to the newest
     if (queued >= 3) { s.cancel(); queued = 0; }
     if (style === 'santa' && beforeSpeak && !s.speaking) beforeSpeak();
@@ -121,6 +163,7 @@
     const v = pickVoice(lang, style);
     if (v) u.voice = v;
     u.pitch = style === 'santa' ? 0.55 : 1;
+    if (typeof window !== 'undefined') window.__lastVoice = 'browser';
     u.rate = style === 'santa' ? 0.88 : 1;
     u.volume = 1;
     queued++;
@@ -169,11 +212,32 @@
 
   PT.levelNumberAt = levelNumberAt;
   PT.announcer = {
-    configure(c) { if (c) cfg = { voice: c.voice || 'santa', lang: c.lang || 'en' }; },
+    configure(c, voiceStatus) {
+      if (c) cfg = { voice: c.voice || 'santa', lang: c.lang || 'en' };
+      if (voiceStatus) realVoice = !!voiceStatus.ready;
+    },
+    /** Every line that can be prepared before game night (no prize amounts in them). */
+    fixedLines(state, c) {
+      const L = LINES[(c && c.lang) || cfg.lang] || LINES.en;
+      const st = 'santa';
+      const out = new Set();
+      const all = (x, ...args) => { for (let i = 0; i < 12; i++) out.add(typeof x === 'function' ? x(...args) : Array.isArray(x) ? x[i % x.length] : x); };
+      all(L.start[st]); all(L.minute[st]); all(L.bubble[st]); all(L.test[st]);
+      const levels = state.config.levels;
+      levels.forEach((lv, i) => {
+        if (lv.type === 'break') all(L.break[st], lv.minutes);
+        else out.add(L.level[st](levelNumberAt(levels, i), lv.sb, lv.bb, lv.ante));
+      });
+      for (const p of state.players) {
+        out.add(L.rebuy[st](p.name)); out.add(L.reentry[st](p.name)); out.add(L.addon[st](p.name));
+      }
+      return [...out].filter(Boolean);
+    },
     onBeforeSpeak(fn) { beforeSpeak = fn; },
     handle,
     say,
-    test(c) { const lang = (c && c.lang) || cfg.lang; const v = (c && c.voice) || cfg.voice; say((LINES[lang] || LINES.en).test[v === 'santa' ? 'santa' : 'normal'], { voice: v === 'off' ? 'normal' : v, lang }); },
+    test(c, opts = {}) { const lang = (c && c.lang) || cfg.lang; const v = (c && c.voice) || cfg.voice; say((LINES[lang] || LINES.en).test[v === 'santa' ? 'santa' : 'normal'], { voice: v === 'off' ? 'normal' : v, lang, browser: opts.browser }); },
+    get realVoice() { return realVoice; },
     lines: LINES,
   };
   // voices load asynchronously in Chrome

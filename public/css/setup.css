@@ -148,3 +148,23 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .theme-christmas .pl-card .ph > .hat.hat-antlers { left: 3%; top: -46%; width: 94%; transform: none; }
 .pl-card .hat-pick { height: 34px; font-size: 13px; padding: 0 8px; }
 .pl-card { padding-top: 26px; }
+
+/* real Santa voice */
+.steps { margin: 0; padding-left: 22px; display: grid; gap: 16px; color: var(--text); }
+.steps li { line-height: 1.5; }
+.steps a { color: var(--gold); }
+.sv-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.sv-row input { flex: 1; min-width: 200px; }
+.sv-note { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.sv-note.ok { color: var(--green); }
+.sv-note.err { color: var(--red-2); }
+.sv-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; margin-top: 10px; }
+.sv-voice { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 14px; background: rgba(0,0,0,.25); border: 1px solid var(--line); }
+.sv-voice.on { border-color: var(--green); box-shadow: 0 0 0 2px rgba(24,194,122,.25); }
+.sv-voice .nm { font-weight: 800; }
+.sv-voice .ds { font-size: 12px; color: var(--muted); max-height: 3.2em; overflow: hidden; }
+.sv-voice .tag { font-size: 11px; font-weight: 800; color: var(--gold); }
+.sv-voice .acts { display: flex; gap: 8px; margin-top: 4px; }
+.sv-voice .acts .btn { height: 36px; font-size: 13px; padding: 0 12px; }
+.sv-remove { margin-top: 14px; font-size: 13px; color: var(--muted); text-decoration: underline; }
+#sv-status.ok { color: var(--green); }

@@ -11,7 +11,7 @@
   <header class="s-top">
     <a class="brand" href="/"><div class="brand-mark">♠</div><span>Tournament Settings</span></a>
     <nav class="s-nav">
-      <a href="#general">General</a><a href="#money">Buy-in &amp; Pool</a><a href="#payouts">Payouts</a>
+      <a href="#general">General</a><a href="#santa">Santa voice</a><a href="#money">Buy-in &amp; Pool</a><a href="#payouts">Payouts</a>
       <a href="#blinds">Blinds</a><a href="#players">Players</a><a href="#chips">Chips</a>
     </nav>
     <div class="s-top-links"><a class="btn" href="/display" target="_blank">📺 <span class="lbl">Display</span></a><a class="btn btn-red" href="/remote">📱 <span class="lbl">Remote</span></a></div>
@@ -30,6 +30,22 @@
         <label class="f"><span>Starting stack (chips)</span><input data-k="startingStack" type="number" min="0" step="any"></label>
         <label class="f"><span>Seats at the table (2–12)</span><input data-k="seats" type="number" min="2" max="12" step="1"></label>
       </div>
+    </section>
+
+    <section class="card" id="santa">
+      <h2>🎅 Real Santa voice <small id="sv-status"></small></h2>
+      <p class="help">The built-in voice is free but sounds robotic. For a realistic Santa, connect a free <b>ElevenLabs</b> account (an AI voice service — nothing to install). Santa then speaks every announcement on the TV, in English or Danish. Each line is made once and saved on this computer, so repeats are free and fast. If the internet drops, the built-in voice takes over.</p>
+      <ol class="steps">
+        <li><b>Create a free account</b> at <a href="https://elevenlabs.io/app/sign-up" target="_blank" rel="noopener">elevenlabs.io</a>. Then open <b>API Keys</b> (in the left menu or under your profile) → <b>Create API key</b>. Give it access to <b>Text to Speech</b> and <b>Voices</b> (read and write). Copy the key.</li>
+        <li><div class="sv-row"><input type="password" id="sv-key" placeholder="Paste your ElevenLabs API key" autocomplete="off"><button type="button" class="btn btn-red" id="sv-key-save">Connect</button></div>
+          <div class="sv-note" id="sv-key-note"></div></li>
+        <li><b>Pick a Santa voice</b> — press ▶ to hear a sample, then <b>Use this voice</b>.
+          <div class="sv-row"><input type="text" id="sv-q" value="santa claus"><button type="button" class="btn" id="sv-search">Search voices</button></div>
+          <div class="sv-results" id="sv-results"></div></li>
+        <li><div class="sv-row"><button type="button" class="btn" id="sv-hear">🔊 Hear Santa</button><button type="button" class="btn btn-gold" id="sv-prepare">🎁 Prepare tonight's lines</button></div>
+          <div class="sv-note" id="sv-prep">Optional: makes all level, break and rebuy lines ahead of time so they play instantly on game night.</div></li>
+      </ol>
+      <button type="button" class="sv-remove hidden" id="sv-remove">Disconnect ElevenLabs</button>
     </section>
 
     <section class="card" id="money">
