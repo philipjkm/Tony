@@ -777,7 +777,7 @@ test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !ch
       await display.waitForFunction(() => true);
       await new Promise((res) => setTimeout(res, 300));
       await act({ type: 'clock.next' });
-      await waitSaid(/Niveau 3\. Blinds er nu 75 og 150/);
+      await waitSaid(/Niveau tre\. Blinds er nu femoghalvfjerds og et hundrede og halvtreds/);
       const last = await display.evaluate(() => window.__said[window.__said.length - 1]);
       assert.equal(last.lang, 'da-DK');
       assert.equal(last.pitch, 1);
@@ -1092,7 +1092,7 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
       await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config: { ...s0.config, announcer: { voice: 'santa', lang: 'da' } }, players: s0.players }) });
       await new Promise((res) => setTimeout(res, 300));
       await c.emitWithAck('action', { type: 'clock.goto', levelIndex: 1 });
-      await display.waitForFunction(() => window.__played.some((s) => /Niveau 2! Blinds er nu 50 og 100/.test(s)), null, { timeout: 15000 });
+      await display.waitForFunction(() => window.__played.some((s) => /Niveau to! Blinds er nu halvtreds og et hundrede/.test(s)), null, { timeout: 15000 });
     });
 
     await t.test('no JS errors', () => assert.deepEqual(errors, []));
@@ -1144,6 +1144,12 @@ test('everyone except Philip adds 300 to the prize pool — pool, payouts and fi
       // 9 × 200 buy-ins + 8 × 300 extra = 4.200
       assert.equal(await display.textContent('#pool'), '4.200 kr.');
       assert.match(await display.textContent('#pool-sub'), /\+2\.400 kr\. extra/);
+      const clash = await display.evaluate(() => {
+        const sub = document.getElementById('pool-sub').getBoundingClientRect();
+        const rib = document.querySelector('.pool-ribbon').getBoundingClientRect();
+        return getComputedStyle(document.querySelector('.pool-ribbon')).display !== 'none' && sub.right - 96 > rib.left;
+      });
+      assert.equal(clash, false, 'prize pool text stays clear of the ribbon');
       assert.match(await display.textContent('#payouts'), /2\.100 kr\.[\s\S]*1\.260 kr\.[\s\S]*840 kr\./);
     });
 
@@ -1346,18 +1352,17 @@ test('Danish Santa + fun facts about players on rebuy and bust-out, never repeat
       await c.emitWithAck('action', { type: 'clock.start' });
       for (let i = 0; i < 3; i++) {
         await c.emitWithAck('action', { type: 'player.rebuy', playerId: id.Tony });
-        await tv.waitForFunction((n) => window.__said.filter((x) => /Tony køber sig ind igen/.test(x)).length >= n, i + 1, { timeout: 10000 });
+        await tv.waitForFunction((n) => window.__said.filter((x) => /Tony laver et rebuy/.test(x)).length >= n, i + 1, { timeout: 10000 });
         if (i === 0) {
-          await tv.waitForSelector('#spotlight.show .fact');
-          await tv.waitForTimeout(1200);
-          await tv.screenshot({ path: path.join(SHOTS, 'display-fun-fact.png') });
+          await tv.waitForSelector('#spotlight.show');
+          assert.equal(await tv.locator('#spotlight .fact').count(), 0, 'facts are spoken only, not shown');
         }
       }
-      const lines = (await said()).filter((x) => /Tony køber sig ind igen/.test(x));
+      const lines = (await said()).filter((x) => /Tony laver et rebuy/.test(x));
       assert.ok(lines.some((l) => /Har aldrig foldet et par esser/.test(l)), lines.join('\n'));
       assert.ok(lines.some((l) => /tre portioner risalamande/.test(l)));
       const third = lines.find((l) => !/esser|risalamande/.test(l));
-      assert.ok(third && /Tony/.test(third.replace(/^.*?igen!/, '')), 'a built-in Danish shout-out about Tony: ' + third);
+      assert.ok(third && /Tony/.test(third.replace(/^.*?rebuy!/, '')), 'a built-in Danish shout-out about Tony: ' + third);
       assert.equal(new Set(lines).size, 3);
     });
 
@@ -1366,7 +1371,7 @@ test('Danish Santa + fun facts about players on rebuy and bust-out, never repeat
       await tv.waitForFunction(() => window.__said.some((x) => /Maria/.test(x) && /plads/.test(x)), null, { timeout: 10000 });
       const line = (await said()).find((x) => /Maria/.test(x) && /plads/.test(x));
       assert.ok(line.split('.').length > 2, 'a shout-out was added: ' + line);
-      await tv.waitForFunction(() => /Maria/.test(document.querySelector('#spotlight .fact') ? document.querySelector('#spotlight .fact').textContent : '') || window.__said.length > 0, null, { timeout: 15000 });
+
     });
 
     await t.test('no JS errors', () => assert.deepEqual(errors, []));

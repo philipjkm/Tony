@@ -406,3 +406,32 @@ test('facts can be labelled for a moment: "Rebuy:" / "Out:" (or Danish "Køb:" /
   assert.equal(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact, null, 'never the "out" line on a rebuy');
   assert.equal(E.apply(t, { type: 'player.eliminate', playerId: 'a' }, T0).events[0].fact, 'Tony er ude, igen');
 });
+
+test('Danish numbers are spoken as Danish words', () => {
+  const fs = require('fs');
+  const vm = require('vm');
+  const ctx = { PT: { ordinal: (n) => n + '.' }, window: {}, document: { addEventListener() {} }, localStorage: { getItem() { return null; }, setItem() {} }, console };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(require('path').join(__dirname, '..', 'public', 'js', 'announcer.js'), 'utf8'), ctx);
+  const say = ctx.PT.speakDanishNumbers;
+  const cases = {
+    'vinder 4060 kroner': 'vinder fire tusind og tres kroner',
+    'vinder 4.060 kroner': 'vinder fire tusind og tres kroner',
+    '1200 kroner': 'et tusind to hundrede kroner',
+    '2025 kroner': 'to tusind og femogtyve kroner',
+    '12500 kroner': 'tolv tusind fem hundrede kroner',
+    '150 kroner': 'et hundrede og halvtreds kroner',
+    'Blinds er nu 200 og 400': 'Blinds er nu to hundrede og fire hundrede',
+    'Blinds er nu 75 og 150': 'Blinds er nu femoghalvfjerds og et hundrede og halvtreds',
+    'Niveau 1!': 'Niveau et!',
+    'Niveau 21!': 'Niveau enogtyve!',
+    'ude på en 5. plads': 'ude på en femte plads',
+    'på en 2. plads': 'på en anden plads',
+    '1 time og 12 minutter': 'en time og tolv minutter',
+    '1000000 kroner': 'en million kroner',
+    '2001 kroner': 'to tusind og en kroner',
+    '3 rebuys': 'tre rebuys',
+  };
+  for (const [input, want] of Object.entries(cases)) assert.equal(say(input), want, input);
+});

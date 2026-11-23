@@ -75,8 +75,8 @@
         santa: () => 'Ho ho ho! Vi er på boblen! Én spiller mere ud, så får alle tilbageværende en gave.',
       },
       headsUp: { normal: (a, b) => `Heads up! ${a} mod ${b}.`, santa: (a, b) => `Heads up! ${a} mod ${b}. Kun én kan stå øverst på julemandens liste!` },
-      rebuy: { normal: (name) => `${name} køber sig ind igen.`, santa: (name) => `Ho ho ho! Flere gaver under træet. ${name} køber sig ind igen!` },
-      reentry: { normal: (name) => `${name} er tilbage i spillet.`, santa: (name) => `${name} er tilbage i spillet! Julemanden tror på en chance mere.` },
+      rebuy: { normal: (name) => `${name} laver et rebuy.`, santa: (name) => `Ho ho ho! Flere gaver under træet. ${name} laver et rebuy!` },
+      reentry: { normal: (name) => `${name} laver et rebuy og er tilbage i spillet.`, santa: (name) => `${name} laver et rebuy og er tilbage i spillet! Julemanden tror på en chance mere.` },
       addon: { normal: (name) => `${name} tager add-on.`, santa: (name) => `${name} tager add-on. Ka-ching!` },
       winner: {
         normal: (name, prize) => `${name} er mester${prize ? ` og vinder ${prize}` : ''}! Tillykke!`,
@@ -182,9 +182,48 @@
     const style = opts.voice || cfg.voice;
     const lang = opts.lang || cfg.lang;
     if (style === 'off' || !text) return;
+    if (lang === 'da') text = speakDanishNumbers(text);
     if (style === 'santa' && realVoice && !realVoiceBroken && !opts.browser) return playClip(text, lang);
     browserSay(text, { voice: style, lang });
   }
+
+  /* ---------- Danish numbers as words (so 4060 is "fire tusind og tres", not "forty sixty") ---------- */
+  const DA_ONES = ['nul', 'en', 'to', 'tre', 'fire', 'fem', 'seks', 'syv', 'otte', 'ni', 'ti', 'elleve', 'tolv', 'tretten', 'fjorten', 'femten', 'seksten', 'sytten', 'atten', 'nitten'];
+  const DA_TENS = ['', '', 'tyve', 'tredive', 'fyrre', 'halvtreds', 'tres', 'halvfjerds', 'firs', 'halvfems'];
+  const DA_ORD = ['', 'første', 'anden', 'tredje', 'fjerde', 'femte', 'sjette', 'syvende', 'ottende', 'niende', 'tiende', 'ellevte', 'tolvte', 'trettende', 'fjortende', 'femtende', 'sekstende', 'syttende', 'attende', 'nittende', 'tyvende'];
+  function da99(n) {
+    if (n < 20) return DA_ONES[n];
+    const t = Math.floor(n / 10), o = n % 10;
+    return o ? `${DA_ONES[o]}og${DA_TENS[t]}` : DA_TENS[t];
+  }
+  function da999(n) { // 1..999, "og" before a last part under 100
+    const h = Math.floor(n / 100), r = n % 100;
+    if (!h) return da99(r);
+    const hs = `${h === 1 ? 'et' : DA_ONES[h]} hundrede`;
+    return r ? `${hs} og ${da99(r)}` : hs;
+  }
+  function daNumber(n, neuter) {
+    n = Math.floor(Math.abs(n));
+    if (n === 0) return 'nul';
+    if (n === 1) return neuter ? 'et' : 'en';
+    const parts = [];
+    const mio = Math.floor(n / 1e6), th = Math.floor((n % 1e6) / 1000), rest = n % 1000;
+    if (mio) parts.push(mio === 1 ? 'en million' : `${da999(mio)} millioner`);
+    if (th) parts.push(`${th === 1 ? 'et' : da999(th)} tusind`);
+    if (rest) parts.push(parts.length && rest < 100 ? `og ${da99(rest)}` : da999(rest));
+    return parts.join(' ');
+  }
+  /** Rewrite digits in a Danish sentence as words, e.g. "på en 5. plads … 4060 kroner" → "på en femte plads … fire tusind og tres kroner". */
+  function speakDanishNumbers(text) {
+    return String(text)
+      .replace(/(\d+)\.(?=\s*plads)/g, (m, d) => DA_ORD[+d] || daNumber(+d))
+      .replace(/(\d{1,3}(?:\.\d{3})+|\d+)/g, (m, d, off, str) => {
+        const n = Number(d.replace(/\./g, ''));
+        const before = str.slice(Math.max(0, off - 8), off);
+        return daNumber(n, /niveau\s*$/i.test(before));
+      });
+  }
+  PT.speakDanishNumbers = speakDanishNumbers;
 
   function browserSay(text, opts) {
     const s = synth();
@@ -209,17 +248,6 @@
 
   /** Speak for a game event (from the TV display). */
   /* ---------- fun facts & shout-outs about players (rebuy / bust-out) ---------- */
-  // lead-ins before the host's own facts — different for a rebuy and a bust-out
-  const LEAD = {
-    da: {
-      rebuy: [(n) => `Og mens ${n} finder pengene frem: `, (n) => `Fra nissernes notesbog om ${n}: `, () => 'Julemanden har hørt et rygte: ', (n) => `Til info, mens ${n} betaler: `],
-      out: [(n) => `Til eftertiden om ${n}: `, () => 'Lidt trøst, eller måske ikke, fra nissernes notesbog: ', () => 'Julemanden har hørt et rygte: ', (n) => `Og så lige en sidste ting om ${n}: `],
-    },
-    en: {
-      rebuy: [(n) => `And while ${n} finds the money: `, (n) => `From the elves' notebook on ${n}: `, () => 'Santa heard a little rumour: ', (n) => `Just so you know, while ${n} pays up: `],
-      out: [(n) => `For the record, about ${n}: `, () => "A little comfort, or maybe not, from the elves' notebook: ", () => 'Santa heard a little rumour: ', (n) => `And one last thing about ${n}: `],
-    },
-  };
   const dur = (ms, lang) => {
     const h = Math.floor(ms / 3600000);
     const m = Math.round((ms % 3600000) / 60000);
@@ -232,8 +260,8 @@
     da: {
       rebuy: [
         { when: (x) => x.rebuys >= 3, say: (p, x) => `Rebuy nummer ${x.rebuys}, ${p.name}? Nisserne er begyndt at føre et særskilt regnskab over dig.` },
-        { when: (x) => x.rebuys >= 2, say: (p, x) => `${p.name} har nu købt sig ind ${x.rebuys} gange. Julemanden overvejer at sende en regning i stedet for gaver.` },
-        { when: (x) => x.reentry && x.minutes < 30, say: (p) => `Det tog ikke lang tid, ${p.name}. Stolen var knap nok blevet kold.` },
+        { when: (x) => x.rebuys >= 2, say: (p, x) => `${p.name} har nu lavet ${x.rebuys} rebuys. Julemanden overvejer at sende en regning i stedet for gaver.` },
+        { when: (x) => x.reentry && x.minutes >= 1 && x.minutes < 30, say: (p) => `Det tog ikke lang tid, ${p.name}. Stolen var knap nok blevet kold.` },
         { say: (p) => `Pengene ruller, ${p.name}. Bare den forkerte vej.` },
         { say: (p) => `Tak for bidraget til præmiepuljen, ${p.name}. Resten af bordet siger glædelig jul!` },
         { say: (p) => `Bare rolig, ${p.name}. Det er kun penge … og lidt stolthed.` },
@@ -242,7 +270,7 @@
       ],
       out: [
         { when: (x) => x.bubble, say: (p) => `${p.name} snublede lige før pengene. Årets boble-dreng, og det med stil!` },
-        { when: (x) => x.minutes < 45, say: (p, x) => `${p.name} nåede knap at få varmen i stolen. Efter ${x.played} var festen slut.` },
+        { when: (x) => x.minutes >= 1 && x.minutes < 45, say: (p, x) => `${p.name} nåede knap at få varmen i stolen. Efter ${x.played} var festen slut.` },
         { when: (x) => x.prize > 0, say: (p, x) => `${p.name} går hjem med ${x.money}. Ikke dårligt, når man tænker på, hvordan der blev spillet.` },
         { when: (x) => x.rebuys >= 2, say: (p, x) => `${x.rebuys} rebuys, og alligevel ude. ${p.name}, julemanden beundrer din gavmildhed.` },
         { when: (x) => x.minutes >= 45, say: (p, x) => `${p.name} holdt ud i ${x.played}. Der er stadig gløgg tilbage, så aftenen er ikke helt tabt.` },
@@ -256,7 +284,7 @@
       rebuy: [
         { when: (x) => x.rebuys >= 3, say: (p, x) => `Rebuy number ${x.rebuys}, ${p.name}? The elves have started a separate ledger just for you.` },
         { when: (x) => x.rebuys >= 2, say: (p, x) => `${p.name} has now bought back in ${x.rebuys} times. Santa is thinking of sending a bill instead of presents.` },
-        { when: (x) => x.reentry && x.minutes < 30, say: (p) => `That didn't take long, ${p.name}. The chair was still warm.` },
+        { when: (x) => x.reentry && x.minutes >= 1 && x.minutes < 30, say: (p) => `That didn't take long, ${p.name}. The chair was still warm.` },
         { say: (p) => `The money keeps flowing, ${p.name}. Just in the wrong direction.` },
         { say: (p) => `Thanks for the donation to the prize pool, ${p.name}. The rest of the table says Merry Christmas!` },
         { say: (p) => `Don't worry, ${p.name}. It's only money … and a little pride.` },
@@ -265,7 +293,7 @@
       ],
       out: [
         { when: (x) => x.bubble, say: (p) => `${p.name} tripped right before the money. Bubble boy of the year, and in style!` },
-        { when: (x) => x.minutes < 45, say: (p, x) => `${p.name} barely warmed the chair. After ${x.played}, the party was over.` },
+        { when: (x) => x.minutes >= 1 && x.minutes < 45, say: (p, x) => `${p.name} barely warmed the chair. After ${x.played}, the party was over.` },
         { when: (x) => x.prize > 0, say: (p, x) => `${p.name} goes home with ${x.money}. Not bad, considering how that was played.` },
         { when: (x) => x.rebuys >= 2, say: (p, x) => `${x.rebuys} rebuys and still out. ${p.name}, Santa admires your generosity.` },
         { when: (x) => x.minutes >= 45, say: (p, x) => `${p.name} lasted ${x.played}. There's still mulled wine left, so the night isn't completely lost.` },
@@ -283,8 +311,10 @@
     try { used = JSON.parse(localStorage.getItem(storeKey(state, p.id)) || '[]'); } catch { /* private mode */ }
     const keyOf = (i) => kind + i;
     const fits = (i) => !list[i].when || list[i].when(x);
-    // the most fitting line not yet used for this player: situation lines first, then general ones
-    let pool = list.map((_, i) => i).filter((i) => !used.includes(keyOf(i)) && list[i].when && fits(i));
+    // the most fitting line not yet used for this player: the first matching situation line (they are
+    // listed most important first, e.g. bubble boy before a quick exit), otherwise a random general one
+    const first = list.findIndex((l, i) => l.when && !used.includes(keyOf(i)) && fits(i));
+    let pool = first >= 0 ? [first] : [];
     if (!pool.length) pool = list.map((_, i) => i).filter((i) => !used.includes(keyOf(i)) && !list[i].when);
     if (!pool.length) { used = used.filter((k) => !k.startsWith(kind)); pool = list.map((_, i) => i).filter((i) => fits(i)); }
     const i = pool[Math.floor(Math.random() * pool.length)];
@@ -297,10 +327,7 @@
     const lang = cfg.lang;
     const kind = e.type === 'rebuy' ? 'rebuy' : 'out';
     const p = state.players.find((x) => x.id === e.playerId) || { id: e.playerId, name: e.name, rebuys: e.rebuys || 0 };
-    if (e.fact) {
-      const f = /[.!?…]$/.test(e.fact) ? e.fact : e.fact + '.';
-      return pick((LEAD[lang] || LEAD.en)[kind])(p.name) + f;
-    }
+    if (e.fact) return /[.!?…]$/.test(e.fact) ? e.fact : e.fact + '.'; // the host's line is the joke: said as written
     if (cfg.voice === 'normal') return '';
     const end = kind === 'out' ? (p.eliminatedAt || 0) : Date.now();
     const ms = state.startedAt && end ? Math.max(0, end - state.startedAt) : 0;
@@ -379,7 +406,8 @@
       for (const p of state.players) {
         out.add(L.rebuy[st](p.name)); out.add(L.reentry[st](p.name)); out.add(L.addon[st](p.name));
       }
-      return [...out].filter(Boolean);
+      const isDa = ((c && c.lang) || cfg.lang) === 'da';
+      return [...out].filter(Boolean).map((t) => (isDa ? speakDanishNumbers(t) : t));
     },
     onBeforeSpeak(fn) { beforeSpeak = fn; },
     handle,
