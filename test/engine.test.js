@@ -393,3 +393,16 @@ test('player fun facts: each told once per game, then none left; edits keep what
   assert.equal(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact, 'Ny fact');
   assert.ok(t.players[0].facts.length <= 25);
 });
+
+test('facts can be labelled for a moment: "Rebuy:" / "Out:" (or Danish "Køb:" / "Ude:")', () => {
+  const t = E.createTournament({ ...E.defaultConfig(), rebuy: { enabled: true, price: 10, chips: 100, lastLevel: 0, maxPerPlayer: 0 } }, [
+    { id: 'a', name: 'Tony', facts: ['Rebuy: Tony betaler igen', 'Ude: Tony er ude, igen', 'Altid sidst til bords'] },
+    { id: 'b', name: 'Maria' }, { id: 'c', name: 'Jake' },
+  ], T0);
+  const r1 = E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact;
+  assert.equal(r1, 'Tony betaler igen', 'the rebuy line first, without its label');
+  const r2 = E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact;
+  assert.equal(r2, 'Altid sidst til bords', 'then a general line');
+  assert.equal(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact, null, 'never the "out" line on a rebuy');
+  assert.equal(E.apply(t, { type: 'player.eliminate', playerId: 'a' }, T0).events[0].fact, 'Tony er ude, igen');
+});

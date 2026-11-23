@@ -335,6 +335,46 @@
     setDirty(true);
   });
 
+  /* copy / paste all notes as one block (e.g. to have them rewritten, then paste back) */
+  function notesText() {
+    return players.map((p) => `${p.name}:\n` + ((p.facts || []).filter((f) => String(f).trim()).map((f) => `- ${String(f).trim()}`).join('\n') || '- ')).join('\n\n');
+  }
+  function parseNotes(text) {
+    const byName = new Map(players.map((p, i) => [p.name.trim().toLowerCase(), i]));
+    const out = new Map();
+    let cur = null;
+    for (const raw of String(text).split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      // headings like "Tony:", "**Tony:**", "## Tony:" (formatting from a chat reply is ignored)
+      const head = line.replace(/[*_#]/g, '').trim().match(/^(.+?)\s*:\s*$/);
+      if (head && byName.has(head[1].trim().toLowerCase())) { cur = byName.get(head[1].trim().toLowerCase()); out.set(cur, []); continue; }
+      if (cur == null) continue;
+      const item = line.replace(/^([-•*]|\d+[.)])\s*/, '').trim();
+      if (item) out.get(cur).push(item);
+    }
+    return out;
+  }
+  $('notes-copy').onclick = async () => {
+    const text = notesText();
+    try { await navigator.clipboard.writeText(text); toast('📋 Copied — paste it into the chat'); } catch {
+      $('notes-paste').classList.remove('hidden');
+      $('notes-paste-text').value = text;
+      $('notes-paste-text').select();
+      toast('Select the text below and copy it (⌘C)');
+    }
+  };
+  $('notes-paste-open').onclick = () => { $('notes-paste').classList.toggle('hidden'); $('notes-paste-text').focus(); };
+  $('notes-paste-apply').onclick = () => {
+    const found = parseNotes($('notes-paste-text').value);
+    if (!found.size) return svNote('notes-paste-note', 'No player names found. Each player needs a line like "Tony:" above their notes.', 'err');
+    for (const [i, lines] of found) players[i].facts = lines;
+    const missing = players.filter((_, i) => !found.has(i)).map((p) => p.name);
+    renderNotes();
+    setDirty(true);
+    svNote('notes-paste-note', `✓ Notes updated for ${found.size} player${found.size > 1 ? 's' : ''}${missing.length ? ` (unchanged: ${missing.join(', ')})` : ''}. Press Save changes.`, 'ok');
+  };
+
   function renderPlayers() {
     renderNotes();
     PT.assignHats(players);

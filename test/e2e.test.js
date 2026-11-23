@@ -1377,3 +1377,88 @@ test('Danish Santa + fun facts about players on rebuy and bust-out, never repeat
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('notes round-trip (copy → rewrite → paste) and lines that fit the moment', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-notes-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  try {
+    await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { buyIn: 100, payouts: { mode: 'percent', places: [60, 40] } }, players: [
+      { name: 'Tony', facts: ['Always orders pizza', 'Thinks he is a pro'] }, { name: 'Maria' }, { name: 'Jake' }, { name: 'Sofia' },
+    ] }) });
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ['clipboard-read', 'clipboard-write'] });
+    const setup = await ctx.newPage();
+    setup.on('pageerror', (e) => errors.push(e.message));
+    await setup.goto(base + '/setup#notes');
+    await setup.waitForSelector('[data-pl-facts="0"]');
+
+    await t.test('Copy all notes gives one block to paste into the chat', async () => {
+      await setup.click('#notes-copy');
+      const text = await setup.evaluate(() => navigator.clipboard.readText());
+      assert.equal(text, 'Tony:\n- Always orders pizza\n- Thinks he is a pro\n\nMaria:\n- \n\nJake:\n- \n\nSofia:\n- ');
+    });
+
+    await t.test('paste the rewritten Danish notes back (with Rebuy:/Out: labels)', async () => {
+      await setup.click('#notes-paste-open');
+      await setup.fill('#notes-paste-text', [
+        '**Tony:**',
+        '- Rebuy: Tony bestiller pizza igen. Han har tydeligvis brug for brændstof til at tabe flere penge.',
+        '- Out: Tony troede, han var professionel. Det gjorde vi andre ikke.',
+        '', 'Jake:', '1. Jake har aldrig vundet en hånd, han ikke burde have tabt.',
+      ].join('\n'));
+      await setup.click('#notes-paste-apply');
+      assert.match(await setup.textContent('#notes-paste-note'), /2 players[\s\S]*unchanged: Maria, Sofia/);
+      await setup.click('#b-save');
+      await setup.waitForFunction(() => !document.getElementById('s-status').classList.contains('dirty'));
+      const s = await (await fetch(base + '/api/state')).json();
+      assert.equal(s.players[0].facts.length, 2);
+      assert.match(s.players[0].facts[0], /^Rebuy: Tony bestiller pizza/);
+      assert.deepEqual(s.players[2].facts, ['Jake har aldrig vundet en hånd, han ikke burde have tabt.']);
+    });
+
+    const tv = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    await tv.addInitScript(() => {
+      window.__said = [];
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
+    });
+    tv.on('pageerror', (e) => errors.push(e.message));
+    await tv.goto(base + '/display');
+    await tv.waitForSelector('.seat');
+    await tv.click('body');
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+    const s0 = await (await fetch(base + '/api/state')).json();
+    const id = Object.fromEntries(s0.players.map((p) => [p.name, p.id]));
+    const saidAbout = (re) => tv.evaluate((src) => window.__said.filter((x) => new RegExp(src).test(x)), re.source);
+
+    await t.test('Tony rebuys: the Rebuy line (never the Out line), in a Danish lead-in', async () => {
+      await c.emitWithAck('action', { type: 'clock.start' });
+      await c.emitWithAck('action', { type: 'player.rebuy', playerId: id.Tony });
+      await tv.waitForFunction(() => window.__said.some((x) => /pizza igen/.test(x)), null, { timeout: 10000 });
+      const [line] = await saidAbout(/pizza igen/);
+      assert.doesNotMatch(line, /Rebuy:/, 'label is not read out');
+      assert.doesNotMatch(line, /professionel/);
+    });
+
+    await t.test('Tony goes out: the Out line', async () => {
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: id.Tony });
+      await tv.waitForFunction(() => window.__said.some((x) => /troede, han var professionel/.test(x)), null, { timeout: 10000 });
+    });
+
+    await t.test('Maria (no notes) bursts the bubble: Santa needles the bubble boy', async () => {
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: id.Maria });
+      await tv.waitForFunction(() => window.__said.some((x) => /Maria/.test(x) && /boble-dreng/.test(x)), null, { timeout: 10000 });
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

@@ -134,6 +134,15 @@
     <section class="card" id="notes">
       <h2>🎅 Santa's notes about the players</h2>
       <p class="help">Write fun facts or shout-outs about each player, one per line. When a player <b>rebuys or goes out</b>, Santa tells one they haven't heard yet, so nothing is repeated for the same person. When someone's own facts run out, Santa uses his own shout-outs. Write them the way Santa should say them, in Danish if the announcer speaks Danish.</p>
+      <p class="help">Start a line with <b>Rebuy:</b> or <b>Out:</b> to use it only at that moment. Lines without a label can be used for either.</p>
+      <div class="sv-row notes-tools">
+        <button type="button" class="btn" id="notes-copy">📋 Copy all notes</button>
+        <button type="button" class="btn" id="notes-paste-open">📥 Paste notes</button>
+      </div>
+      <div class="notes-paste hidden" id="notes-paste">
+        <textarea id="notes-paste-text" rows="10" placeholder="Tony:&#10;- Rebuy: …&#10;- Out: …&#10;Maria:&#10;- …"></textarea>
+        <div class="sv-row"><button type="button" class="btn btn-red" id="notes-paste-apply">Use these notes</button><span class="sv-note" id="notes-paste-note"></span></div>
+      </div>
       <div class="notes-list" id="notes-list"></div>
     </section>
 

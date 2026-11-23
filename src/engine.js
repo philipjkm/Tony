@@ -134,14 +134,28 @@ const cleanFacts = (f) => (Array.isArray(f) ? f : String(f || '').split('\n'))
   .slice(0, 25);
 
 /** Next fact for a player that hasn't been told yet in this game (null when all are used). */
-function pickFact(p) {
+// a line can be meant for one moment only: "Rebuy: …" / "Out: …" (Danish "Køb: …" / "Ude: …")
+const TAG_REBUY = /^\s*(rebuy|re-?entry|køb|genkøb)\s*:\s*/i;
+const TAG_OUT = /^\s*(out|ude|bust|exit)\s*:\s*/i;
+function factKind(line) {
+  if (TAG_REBUY.test(line)) return 'rebuy';
+  if (TAG_OUT.test(line)) return 'out';
+  return 'any';
+}
+const factText = (line) => line.replace(TAG_REBUY, '').replace(TAG_OUT, '').trim();
+
+/** Next untold fact for this moment ('rebuy' | 'out'); null when there is none left. */
+function pickFact(p, moment) {
   const facts = p.facts || [];
   const used = new Set((p.factsUsed || []).filter((i) => i < facts.length));
-  const free = facts.map((_, i) => i).filter((i) => !used.has(i));
+  const fits = (i) => !used.has(i) && factText(facts[i]) && (factKind(facts[i]) === moment || factKind(facts[i]) === 'any');
+  // lines written for this exact moment go first, then general ones
+  const exact = facts.map((_, i) => i).filter((i) => fits(i) && factKind(facts[i]) === moment);
+  const free = exact.length ? exact : facts.map((_, i) => i).filter(fits);
   if (!free.length) return null;
   const i = free[Math.floor(Math.random() * free.length)];
   p.factsUsed = [...used, i];
-  return facts[i];
+  return factText(facts[i]);
 }
 
 function safeUrl(u) {
@@ -504,7 +518,7 @@ function apply(t, action, now = Date.now()) {
       const prize = (after.payouts.find((x) => x.place === place) || {}).amount || 0;
       pushLog(t, { id: uid(), ts: now, type: 'eliminate', playerId: p.id, name: p.name, place, before });
       const burstBubble = !d.inTheMoney && after.inTheMoney;
-      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize, burstBubble, fact: pickFact(p) });
+      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize, burstBubble, fact: pickFact(p, 'out') });
       if (!d.bubble && after.bubble) events.push({ type: 'bubble', paidPlaces: after.paidPlaces });
       if (burstBubble) events.push({ type: 'inTheMoney', bubbleBoy: p.name, paidPlaces: after.paidPlaces });
       if (!d.headsUp && after.headsUp) {
@@ -530,7 +544,7 @@ function apply(t, action, now = Date.now()) {
       p.status = 'active';
       p.eliminatedAt = null;
       pushLog(t, { id: uid(), ts: now, type: 'rebuy', playerId: p.id, name: p.name, before });
-      events.push({ type: 'rebuy', playerId: p.id, name: p.name, photo: p.photo, reentry, rebuys: p.rebuys, fact: pickFact(p) });
+      events.push({ type: 'rebuy', playerId: p.id, name: p.name, photo: p.photo, reentry, rebuys: p.rebuys, fact: pickFact(p, 'rebuy') });
       break;
     }
     case 'player.addon': {

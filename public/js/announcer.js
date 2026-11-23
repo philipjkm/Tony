@@ -209,9 +209,16 @@
 
   /** Speak for a game event (from the TV display). */
   /* ---------- fun facts & shout-outs about players (rebuy / bust-out) ---------- */
+  // lead-ins before the host's own facts — different for a rebuy and a bust-out
   const LEAD = {
-    da: [(n) => 'Fra nissernes notesbog: ', (n) => 'Julemanden har hørt et rygte: ', (n) => `Lille julefact om ${n}: `, (n) => `Og vidste I godt det her om ${n}? `],
-    en: [(n) => "From the elves' notebook: ", (n) => 'Santa heard a little rumour: ', (n) => `Fun fact about ${n}: `, (n) => `And did you know this about ${n}? `],
+    da: {
+      rebuy: [(n) => `Og mens ${n} finder pengene frem: `, (n) => `Fra nissernes notesbog om ${n}: `, () => 'Julemanden har hørt et rygte: ', (n) => `Til info, mens ${n} betaler: `],
+      out: [(n) => `Til eftertiden om ${n}: `, () => 'Lidt trøst, eller måske ikke, fra nissernes notesbog: ', () => 'Julemanden har hørt et rygte: ', (n) => `Og så lige en sidste ting om ${n}: `],
+    },
+    en: {
+      rebuy: [(n) => `And while ${n} finds the money: `, (n) => `From the elves' notebook on ${n}: `, () => 'Santa heard a little rumour: ', (n) => `Just so you know, while ${n} pays up: `],
+      out: [(n) => `For the record, about ${n}: `, () => "A little comfort, or maybe not, from the elves' notebook: ", () => 'Santa heard a little rumour: ', (n) => `And one last thing about ${n}: `],
+    },
   };
   const dur = (ms, lang) => {
     const h = Math.floor(ms / 3600000);
@@ -219,67 +226,96 @@
     if (lang === 'da') return h ? `${h} ${h === 1 ? 'time' : 'timer'} og ${m} minutter` : `${m} minutter`;
     return h ? `${h} ${h === 1 ? 'hour' : 'hours'} and ${m} minutes` : `${m} minutes`;
   };
-  // built-in shout-outs, used when a player's own facts have all been told
+  // built-in shout-outs (needling, situation-aware), used when a player's own lines run out.
+  // `when` picks the right moment; lines without `when` fit any time.
   const SHOUT = {
     da: {
       rebuy: [
-        (p) => `${p.name} har nu købt sig ind ${p.rebuys} ${p.rebuys === 1 ? 'gang' : 'gange'}. Julemanden kalder det en investering i julestemningen!`,
-        (p) => `Nisserne har noteret det: ${p.name} giver aldrig op!`,
-        (p) => `${p.name} tror stadig på julemirakler. Det gør julemanden også!`,
-        (p) => `Rudolf ville have gjort præcis det samme, ${p.name}!`,
-        (p) => `Der er altid plads til én gave mere under træet, ${p.name}.`,
-        (p) => `Modigt, ${p.name}! Julemanden kan godt lide en spiller med julehumør.`,
+        { when: (x) => x.rebuys >= 3, say: (p, x) => `Rebuy nummer ${x.rebuys}, ${p.name}? Nisserne er begyndt at føre et særskilt regnskab over dig.` },
+        { when: (x) => x.rebuys >= 2, say: (p, x) => `${p.name} har nu købt sig ind ${x.rebuys} gange. Julemanden overvejer at sende en regning i stedet for gaver.` },
+        { when: (x) => x.reentry && x.minutes < 30, say: (p) => `Det tog ikke lang tid, ${p.name}. Stolen var knap nok blevet kold.` },
+        { say: (p) => `Pengene ruller, ${p.name}. Bare den forkerte vej.` },
+        { say: (p) => `Tak for bidraget til præmiepuljen, ${p.name}. Resten af bordet siger glædelig jul!` },
+        { say: (p) => `Bare rolig, ${p.name}. Det er kun penge … og lidt stolthed.` },
+        { say: (p) => `${p.name} er tilbage! Julemanden beundrer optimismen. Kortspillet, knap så meget.` },
+        { say: (p) => `${p.name} tror stadig på julemirakler. Det er også nødvendigt nu.` },
       ],
       out: [
-        (p, x) => (x.played ? `${p.name} holdt ud i ${x.played}. Respekt fra Nordpolen!` : `Respekt fra Nordpolen, ${p.name}!`),
-        (p) => `Der står risalamande i køkkenet til dig, ${p.name}.`,
-        (p) => `${p.name}, du står stadig på den søde liste … næsten.`,
-        (p) => `Bedre held næste jul, ${p.name}!`,
-        (p) => `${p.name} får en ekstra småkage som trøst.`,
-        (p) => `Selv julemanden taber nogle gange, ${p.name}.`,
+        { when: (x) => x.bubble, say: (p) => `${p.name} snublede lige før pengene. Årets boble-dreng, og det med stil!` },
+        { when: (x) => x.minutes < 45, say: (p, x) => `${p.name} nåede knap at få varmen i stolen. Efter ${x.played} var festen slut.` },
+        { when: (x) => x.prize > 0, say: (p, x) => `${p.name} går hjem med ${x.money}. Ikke dårligt, når man tænker på, hvordan der blev spillet.` },
+        { when: (x) => x.rebuys >= 2, say: (p, x) => `${x.rebuys} rebuys, og alligevel ude. ${p.name}, julemanden beundrer din gavmildhed.` },
+        { when: (x) => x.minutes >= 45, say: (p, x) => `${p.name} holdt ud i ${x.played}. Der er stadig gløgg tilbage, så aftenen er ikke helt tabt.` },
+        { say: (p) => `${p.name}, du står stadig på den søde liste … men kun fordi julemanden har ondt af dig.` },
+        { say: (p) => `Der står risalamande i køkkenet, ${p.name}. Den er nok nemmere at vinde over.` },
+        { say: (p) => `Selv Rudolf havde spillet den hånd bedre, ${p.name}.` },
+        { say: (p) => `${p.name} er ude. Nu kan du heppe på dem, der stadig kan spille.` },
       ],
     },
     en: {
       rebuy: [
-        (p) => `${p.name} has now bought back in ${p.rebuys} ${p.rebuys === 1 ? 'time' : 'times'}. Santa calls that an investment in Christmas spirit!`,
-        (p) => `The elves have noted it: ${p.name} never gives up!`,
-        (p) => `${p.name} still believes in Christmas miracles. So does Santa!`,
-        (p) => `Rudolph would have done exactly the same, ${p.name}!`,
-        (p) => `There's always room for one more present under the tree, ${p.name}.`,
-        (p) => `Brave move, ${p.name}! Santa likes a player with Christmas spirit.`,
+        { when: (x) => x.rebuys >= 3, say: (p, x) => `Rebuy number ${x.rebuys}, ${p.name}? The elves have started a separate ledger just for you.` },
+        { when: (x) => x.rebuys >= 2, say: (p, x) => `${p.name} has now bought back in ${x.rebuys} times. Santa is thinking of sending a bill instead of presents.` },
+        { when: (x) => x.reentry && x.minutes < 30, say: (p) => `That didn't take long, ${p.name}. The chair was still warm.` },
+        { say: (p) => `The money keeps flowing, ${p.name}. Just in the wrong direction.` },
+        { say: (p) => `Thanks for the donation to the prize pool, ${p.name}. The rest of the table says Merry Christmas!` },
+        { say: (p) => `Don't worry, ${p.name}. It's only money … and a little pride.` },
+        { say: (p) => `${p.name} is back! Santa admires the optimism. The card play, not so much.` },
+        { say: (p) => `${p.name} still believes in Christmas miracles. Which is just as well.` },
       ],
       out: [
-        (p, x) => (x.played ? `${p.name} lasted ${x.played}. Respect from the North Pole!` : `Respect from the North Pole, ${p.name}!`),
-        (p) => `There's rice pudding waiting in the kitchen for you, ${p.name}.`,
-        (p) => `${p.name}, you're still on the nice list … almost.`,
-        (p) => `Better luck next Christmas, ${p.name}!`,
-        (p) => `${p.name} gets an extra cookie as a consolation prize.`,
-        (p) => `Even Santa loses sometimes, ${p.name}.`,
+        { when: (x) => x.bubble, say: (p) => `${p.name} tripped right before the money. Bubble boy of the year, and in style!` },
+        { when: (x) => x.minutes < 45, say: (p, x) => `${p.name} barely warmed the chair. After ${x.played}, the party was over.` },
+        { when: (x) => x.prize > 0, say: (p, x) => `${p.name} goes home with ${x.money}. Not bad, considering how that was played.` },
+        { when: (x) => x.rebuys >= 2, say: (p, x) => `${x.rebuys} rebuys and still out. ${p.name}, Santa admires your generosity.` },
+        { when: (x) => x.minutes >= 45, say: (p, x) => `${p.name} lasted ${x.played}. There's still mulled wine left, so the night isn't completely lost.` },
+        { say: (p) => `${p.name}, you're still on the nice list … but only because Santa feels sorry for you.` },
+        { say: (p) => `There's rice pudding in the kitchen, ${p.name}. Probably easier to beat.` },
+        { say: (p) => `Even Rudolph would have played that hand better, ${p.name}.` },
+        { say: (p) => `${p.name} is out. Now you can cheer for the ones who can still play.` },
       ],
     },
   };
   const storeKey = (state, id) => `pt-shout:${state.id}:${id}`;
-  function nextShout(kind, p, state, lang) {
+  function nextShout(kind, p, state, lang, x) {
     const list = (SHOUT[lang] || SHOUT.en)[kind];
     let used = [];
     try { used = JSON.parse(localStorage.getItem(storeKey(state, p.id)) || '[]'); } catch { /* private mode */ }
-    let free = list.map((_, i) => kind + i).filter((k) => !used.includes(k));
-    if (!free.length) { used = used.filter((k) => !k.startsWith(kind)); free = list.map((_, i) => kind + i); }
-    const k = free[Math.floor(Math.random() * free.length)];
-    try { localStorage.setItem(storeKey(state, p.id), JSON.stringify([...used, k])); } catch { /* ignore */ }
-    const played = p.eliminatedAt && state.startedAt ? dur(p.eliminatedAt - state.startedAt, lang) : '';
-    return list[Number(k.slice(kind.length))](p, { played });
+    const keyOf = (i) => kind + i;
+    const fits = (i) => !list[i].when || list[i].when(x);
+    // the most fitting line not yet used for this player: situation lines first, then general ones
+    let pool = list.map((_, i) => i).filter((i) => !used.includes(keyOf(i)) && list[i].when && fits(i));
+    if (!pool.length) pool = list.map((_, i) => i).filter((i) => !used.includes(keyOf(i)) && !list[i].when);
+    if (!pool.length) { used = used.filter((k) => !k.startsWith(kind)); pool = list.map((_, i) => i).filter((i) => fits(i)); }
+    const i = pool[Math.floor(Math.random() * pool.length)];
+    try { localStorage.setItem(storeKey(state, p.id), JSON.stringify([...used, keyOf(i)])); } catch { /* ignore */ }
+    return list[i].say(p, x);
   }
-  /** The extra sentence about a player: one of their own facts first, then a shout-out. */
+  /** The extra sentence about a player: one of their own lines first, then a situation-aware shout-out. */
   function extraFor(e, state) {
     if (e.type !== 'eliminated' && e.type !== 'rebuy') return '';
     const lang = cfg.lang;
-    const p = state.players.find((x) => x.id === e.playerId) || { id: e.playerId, name: e.name, rebuys: e.rebuys || 1 };
+    const kind = e.type === 'rebuy' ? 'rebuy' : 'out';
+    const p = state.players.find((x) => x.id === e.playerId) || { id: e.playerId, name: e.name, rebuys: e.rebuys || 0 };
     if (e.fact) {
       const f = /[.!?…]$/.test(e.fact) ? e.fact : e.fact + '.';
-      return pick(LEAD[lang] || LEAD.en)(p.name) + f;
+      return pick((LEAD[lang] || LEAD.en)[kind])(p.name) + f;
     }
-    return cfg.voice === 'santa' || cfg.voice === 'off' ? nextShout(e.type === 'rebuy' ? 'rebuy' : 'out', p, state, lang) : '';
+    if (cfg.voice === 'normal') return '';
+    const end = kind === 'out' ? (p.eliminatedAt || 0) : Date.now();
+    const ms = state.startedAt && end ? Math.max(0, end - state.startedAt) : 0;
+    const d = state.derived;
+    const x = {
+      rebuys: kind === 'rebuy' ? (e.rebuys || p.rebuys || 1) : (p.rebuys || 0),
+      reentry: !!e.reentry,
+      minutes: ms / 60000,
+      played: dur(ms, lang),
+      place: e.place,
+      prize: e.prize || 0,
+      money: e.prize ? (LINES[lang] || LINES.en).money(e.prize, state.config.currency) : '',
+      bubble: kind === 'out' && !!e.burstBubble,
+    };
+    return nextShout(kind, p, state, lang, x);
   }
 
   function handle(e, state) {

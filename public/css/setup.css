@@ -180,3 +180,7 @@ input[type=number] { font-variant-numeric: tabular-nums; }
 .note-row textarea { width: 100%; min-height: 70px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line-2); background: #0b0f16; color: var(--text); font: inherit; font-size: 14px; line-height: 1.45; outline: none; }
 .note-row textarea:focus { border-color: var(--red-2); box-shadow: 0 0 0 3px rgba(229,23,63,.2); }
 @media (max-width: 640px) { .note-row { grid-template-columns: 1fr; } }
+
+.notes-tools { margin: 0 0 12px; }
+.notes-paste { margin-bottom: 14px; }
+.notes-paste textarea { width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--line-2); background: #0b0f16; color: var(--text); font: inherit; font-size: 14px; line-height: 1.5; }
