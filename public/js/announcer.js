@@ -182,7 +182,7 @@
     const style = opts.voice || cfg.voice;
     const lang = opts.lang || cfg.lang;
     if (style === 'off' || !text) return;
-    if (lang === 'da') text = speakDanishNumbers(text);
+    if (lang === 'da') text = speakDanish(text);
     if (style === 'santa' && realVoice && !realVoiceBroken && !opts.browser) return playClip(text, lang);
     browserSay(text, { voice: style, lang });
   }
@@ -224,6 +224,12 @@
       });
   }
   PT.speakDanishNumbers = speakDanishNumbers;
+  /** Everything Santa says in Danish: numbers as words, and "rebuy" spelled the way it should sound. */
+  function speakDanish(text, rebuySay) {
+    const say = rebuySay || cfg.rebuySay || 'ri-bai';
+    return speakDanishNumbers(String(text).replace(/\b(re-?buy)(s?)\b/gi, (m, w, plural) => say + (plural ? 's' : '')));
+  }
+  PT.speakDanish = speakDanish;
 
   function browserSay(text, opts) {
     const s = synth();
@@ -388,7 +394,7 @@
   PT.levelNumberAt = levelNumberAt;
   PT.announcer = {
     configure(c, voiceStatus) {
-      if (c) cfg = { voice: c.voice || 'santa', lang: c.lang || 'en' };
+      if (c) cfg = { voice: c.voice || 'santa', lang: c.lang || 'en', rebuySay: c.rebuySay || 'ri-bai' };
       if (voiceStatus) realVoice = !!voiceStatus.ready;
     },
     /** Every line that can be prepared before game night (no prize amounts in them). */
@@ -407,7 +413,7 @@
         out.add(L.rebuy[st](p.name)); out.add(L.reentry[st](p.name)); out.add(L.addon[st](p.name));
       }
       const isDa = ((c && c.lang) || cfg.lang) === 'da';
-      return [...out].filter(Boolean).map((t) => (isDa ? speakDanishNumbers(t) : t));
+      return [...out].filter(Boolean).map((t) => (isDa ? speakDanish(t, c && c.rebuySay) : t));
     },
     onBeforeSpeak(fn) { beforeSpeak = fn; },
     handle,

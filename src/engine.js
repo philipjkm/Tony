@@ -34,7 +34,7 @@ function defaultConfig() {
     name: 'Friday Night Poker',
     currency: 'kr.',
     theme: 'classic',
-    announcer: { voice: 'santa', lang: 'da' },
+    announcer: { voice: 'santa', lang: 'da', rebuySay: 'ri-bai' },
     sfx: 'fewer',
     buyIn: 50,
     entryFee: 0,
@@ -87,6 +87,8 @@ function normalizeConfig(input) {
     announcer: {
       voice: ['santa', 'normal', 'off'].includes(c.announcer && c.announcer.voice) ? c.announcer.voice : 'santa',
       lang: ['en', 'da'].includes(c.announcer && c.announcer.lang) ? c.announcer.lang : 'da',
+      // how Santa pronounces "rebuy" in Danish (spelled the way it should sound)
+      rebuySay: String((c.announcer && c.announcer.rebuySay) || 'ri-bai').replace(/[<>]/g, '').trim().slice(0, 30) || 'ri-bai',
     },
     buyIn: nonNeg(c.buyIn, d.buyIn),
     entryFee: nonNeg(c.entryFee, 0),

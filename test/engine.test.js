@@ -371,7 +371,7 @@ test('all browser scripts are valid JavaScript', () => {
 });
 
 test('Danish announcer by default', () => {
-  assert.deepEqual(E.defaultConfig().announcer, { voice: 'santa', lang: 'da' });
+  assert.deepEqual(E.defaultConfig().announcer, { voice: 'santa', lang: 'da', rebuySay: 'ri-bai' });
   assert.equal(E.normalizeConfig({}).announcer.lang, 'da');
   assert.equal(E.normalizeConfig({ announcer: { lang: 'en' } }).announcer.lang, 'en', 'English can still be chosen');
 });

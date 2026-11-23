@@ -526,6 +526,11 @@
   };
 
   $('b-voice').onclick = () => PT.announcer.test(cfg.announcer);
+  $('b-rebuy-say').onclick = () => {
+    PT.announcer.configure(cfg.announcer, voiceStatus);
+    const name = (players[0] && players[0].name) || 'Tony';
+    PT.announcer.say(`Ho ho ho! ${name} laver et rebuy!`, { voice: cfg.announcer.voice === 'off' ? 'santa' : cfg.announcer.voice, lang: 'da' });
+  };
 
   // ---- my default setup (settings + players + photos + hats) ----
   $('b-default-save').onclick = async () => {

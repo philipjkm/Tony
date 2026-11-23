@@ -713,7 +713,7 @@ test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !ch
     const names = ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars'];
     const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] }, announcer: { voice: 'santa', lang: 'en' } }, players: names.map((name) => ({ name })) }) })).json();
     const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
-    assert.deepEqual(r.state.config.announcer, { voice: 'santa', lang: 'en' });
+    assert.deepEqual(r.state.config.announcer, { voice: 'santa', lang: 'en', rebuySay: 'ri-bai' });
     const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     await display.addInitScript(fakeSpeech);
     display.on('pageerror', (e) => errors.push(e.message));
@@ -1352,17 +1352,17 @@ test('Danish Santa + fun facts about players on rebuy and bust-out, never repeat
       await c.emitWithAck('action', { type: 'clock.start' });
       for (let i = 0; i < 3; i++) {
         await c.emitWithAck('action', { type: 'player.rebuy', playerId: id.Tony });
-        await tv.waitForFunction((n) => window.__said.filter((x) => /Tony laver et rebuy/.test(x)).length >= n, i + 1, { timeout: 10000 });
+        await tv.waitForFunction((n) => window.__said.filter((x) => /Tony laver et ri-bai/.test(x)).length >= n, i + 1, { timeout: 10000 });
         if (i === 0) {
           await tv.waitForSelector('#spotlight.show');
           assert.equal(await tv.locator('#spotlight .fact').count(), 0, 'facts are spoken only, not shown');
         }
       }
-      const lines = (await said()).filter((x) => /Tony laver et rebuy/.test(x));
+      const lines = (await said()).filter((x) => /Tony laver et ri-bai/.test(x));
       assert.ok(lines.some((l) => /Har aldrig foldet et par esser/.test(l)), lines.join('\n'));
       assert.ok(lines.some((l) => /tre portioner risalamande/.test(l)));
       const third = lines.find((l) => !/esser|risalamande/.test(l));
-      assert.ok(third && /Tony/.test(third.replace(/^.*?rebuy!/, '')), 'a built-in Danish shout-out about Tony: ' + third);
+      assert.ok(third && /Tony/.test(third.replace(/^.*?ri-bai!/, '')), 'a built-in Danish shout-out about Tony: ' + third);
       assert.equal(new Set(lines).size, 3);
     });
 
@@ -1460,6 +1460,59 @@ test('notes round-trip (copy → rewrite → paste) and lines that fit the momen
     });
 
     await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+
+test('Danish Santa pronounces "rebuy" as written in Settings (default "ri-bai"), screen still says rebuy', { skip: !chromium, timeout: 90000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-rebuysay-'));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const fake = () => {
+    window.__said = [];
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
+  };
+  try {
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: {}, players: [{ name: 'Thai', facts: ['Rebuy: Tre rebuys og stadig ingen ring.'] }, { name: 'Oliver' }, { name: 'Mads' }] }) })).json();
+    assert.equal(r.state.config.announcer.rebuySay, 'ri-bai');
+    const tv = await browser.newPage();
+    await tv.addInitScript(fake);
+    await tv.goto(base + '/display');
+    await tv.waitForSelector('.seat');
+    await tv.click('body');
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+    await c.emitWithAck('action', { type: 'clock.start' });
+    await c.emitWithAck('action', { type: 'player.rebuy', playerId: r.state.players[0].id });
+    await tv.waitForFunction(() => window.__said.some((x) => /Thai laver et ri-bai!/.test(x)));
+    const line = (await tv.evaluate(() => window.__said)).find((x) => /Thai laver/.test(x));
+    assert.match(line, /Tre ri-bais og stadig ingen ring/, 'also inside the host\'s own lines, plural too');
+    assert.doesNotMatch(line, /rebuy/i);
+    await tv.waitForSelector('#spotlight.show');
+    assert.match(await tv.textContent('#spotlight'), /REBUY/, 'the screen still says REBUY');
+
+    await t.test('change the spelling in Settings and hear it', async () => {
+      const setup = await browser.newPage();
+      await setup.addInitScript(fake);
+      await setup.goto(base + '/setup');
+      await setup.waitForSelector('[data-k="announcer.rebuySay"]');
+      assert.equal(await setup.inputValue('[data-k="announcer.rebuySay"]'), 'ri-bai');
+      await setup.fill('[data-k="announcer.rebuySay"]', 'rii-baj');
+      await setup.click('#b-rebuy-say');
+      await setup.waitForFunction(() => window.__said.some((x) => /Thai laver et rii-baj!/.test(x)));
+      await setup.click('#b-save');
+      await setup.waitForFunction(() => !document.getElementById('s-status').classList.contains('dirty'));
+      const s = await (await fetch(base + '/api/state')).json();
+      assert.equal(s.config.announcer.rebuySay, 'rii-baj');
+    });
   } finally {
     c.close();
     await browser.close();
