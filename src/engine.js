@@ -34,7 +34,7 @@ function defaultConfig() {
     name: 'Friday Night Poker',
     currency: 'kr.',
     theme: 'classic',
-    announcer: { voice: 'santa', lang: 'en' },
+    announcer: { voice: 'santa', lang: 'da' },
     sfx: 'fewer',
     buyIn: 50,
     entryFee: 0,
@@ -86,7 +86,7 @@ function normalizeConfig(input) {
     sfx: ['fewer', 'all', 'off'].includes(c.sfx) ? c.sfx : 'fewer',
     announcer: {
       voice: ['santa', 'normal', 'off'].includes(c.announcer && c.announcer.voice) ? c.announcer.voice : 'santa',
-      lang: ['en', 'da'].includes(c.announcer && c.announcer.lang) ? c.announcer.lang : 'en',
+      lang: ['en', 'da'].includes(c.announcer && c.announcer.lang) ? c.announcer.lang : 'da',
     },
     buyIn: nonNeg(c.buyIn, d.buyIn),
     entryFee: nonNeg(c.entryFee, 0),
@@ -127,6 +127,22 @@ function normalizeConfig(input) {
 
 const HATS = ['auto', 'none', 'santa', 'elf', 'beanie', 'antlers', 'tophat', 'tree', 'crown', 'wreath', 'bow', 'halo', 'earmuffs'];
 const cleanHat = (h) => (HATS.includes(h) ? h : 'auto');
+// fun facts the announcer can tell about a player (one per line in Settings)
+const cleanFacts = (f) => (Array.isArray(f) ? f : String(f || '').split('\n'))
+  .map((x) => String(x || '').replace(/\s+/g, ' ').trim().slice(0, 220))
+  .filter(Boolean)
+  .slice(0, 25);
+
+/** Next fact for a player that hasn't been told yet in this game (null when all are used). */
+function pickFact(p) {
+  const facts = p.facts || [];
+  const used = new Set((p.factsUsed || []).filter((i) => i < facts.length));
+  const free = facts.map((_, i) => i).filter((i) => !used.has(i));
+  if (!free.length) return null;
+  const i = free[Math.floor(Math.random() * free.length)];
+  p.factsUsed = [...used, i];
+  return facts[i];
+}
 
 function safeUrl(u) {
   u = String(u || '');
@@ -140,6 +156,8 @@ function newPlayer(p) {
     photo: safeUrl(p && p.photo),
     hat: cleanHat(p && p.hat),
     paysExtra: !(p && p.paysExtra === false),
+    facts: cleanFacts(p && p.facts),
+    factsUsed: [],
     status: 'active', // 'active' | 'out'
     rebuys: 0,
     addons: 0,
@@ -179,6 +197,7 @@ function createTournament(config, players, now = Date.now()) {
     log: [],
     seq: 0,
     migratedCurrency: true,
+    migratedDanish: true,
   };
   fixSeats(t);
   return t;
@@ -199,6 +218,11 @@ function updateSetup(t, config, players, now = Date.now()) {
         existing.photo = safeUrl(p.photo);
         existing.hat = cleanHat(p.hat);
         existing.paysExtra = p.paysExtra !== false;
+        const facts = cleanFacts(p.facts);
+        // facts already told stay told, even if the list is edited mid-game
+        const told = new Set((existing.factsUsed || []).map((i) => (existing.facts || [])[i]));
+        existing.facts = facts;
+        existing.factsUsed = facts.map((f, i) => (told.has(f) ? i : -1)).filter((i) => i >= 0);
         return existing;
       }
       return newPlayer(p);
@@ -480,7 +504,7 @@ function apply(t, action, now = Date.now()) {
       const prize = (after.payouts.find((x) => x.place === place) || {}).amount || 0;
       pushLog(t, { id: uid(), ts: now, type: 'eliminate', playerId: p.id, name: p.name, place, before });
       const burstBubble = !d.inTheMoney && after.inTheMoney;
-      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize, burstBubble });
+      events.push({ type: 'eliminated', playerId: p.id, name: p.name, photo: p.photo, place, prize, burstBubble, fact: pickFact(p) });
       if (!d.bubble && after.bubble) events.push({ type: 'bubble', paidPlaces: after.paidPlaces });
       if (burstBubble) events.push({ type: 'inTheMoney', bubbleBoy: p.name, paidPlaces: after.paidPlaces });
       if (!d.headsUp && after.headsUp) {
@@ -506,7 +530,7 @@ function apply(t, action, now = Date.now()) {
       p.status = 'active';
       p.eliminatedAt = null;
       pushLog(t, { id: uid(), ts: now, type: 'rebuy', playerId: p.id, name: p.name, before });
-      events.push({ type: 'rebuy', playerId: p.id, name: p.name, photo: p.photo, reentry });
+      events.push({ type: 'rebuy', playerId: p.id, name: p.name, photo: p.photo, reentry, rebuys: p.rebuys, fact: pickFact(p) });
       break;
     }
     case 'player.addon': {

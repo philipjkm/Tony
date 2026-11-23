@@ -43,6 +43,11 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
       if (t.config.currency === '$') t.config.currency = 'kr.';
       t.migratedCurrency = true;
     }
+    // one-time switch of the announcer to Danish (a later deliberate choice of English is kept)
+    if (!t.migratedDanish) {
+      t.config.announcer.lang = 'da';
+      t.migratedDanish = true;
+    }
     if (t.clock && t.clock.running) {
       // server was stopped while running: restore the time left at the last save, paused
       const elapsed = Math.max(0, (t.savedAt || t.clock.anchor) - t.clock.anchor);
@@ -178,7 +183,7 @@ function createApp({ dataDir = path.join(__dirname, 'data'), port = 3000, tickMs
     try {
       // keep it clean: settings + who plays (names, photos, hats), no game progress
       const tmp = engine.createTournament(config, players, now());
-      const def = { savedAt: new Date().toISOString(), config: tmp.config, players: tmp.players.map(({ id, name, photo, hat, paysExtra }) => ({ id, name, photo, hat, paysExtra })) };
+      const def = { savedAt: new Date().toISOString(), config: tmp.config, players: tmp.players.map(({ id, name, photo, hat, paysExtra, facts }) => ({ id, name, photo, hat, paysExtra, facts })) };
       fs.writeFileSync(defaultFile, JSON.stringify(def, null, 2));
       res.json({ ok: true });
     } catch (e) {

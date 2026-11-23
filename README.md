@@ -69,6 +69,9 @@ The TV also marks the big moments:
 - **In the money:** when the bubble bursts, gold coins rain down and the bubble boy is named.
 - **⚔ Heads up:** the last two players face off.
 
+### Santa's notes (fun facts about players)
+In **Settings → 🎅 Santa's notes**, write fun facts or shout-outs for each player, one per line. When a player rebuys or goes out, Santa adds one they haven't heard yet, and it also appears on the TV under their name. Nothing is repeated for the same person during a game. When a player's own facts run out, Santa uses built-in shout-outs in Danish or English, again without repeats. The announcer speaks **Danish by default**.
+
 ### Real Santa voice (optional, ElevenLabs)
 For a realistic Santa instead of the robotic built-in voice:
 1. Create a free account at elevenlabs.io and make an API key with **Text to Speech** and **Voices** (read and write) access.

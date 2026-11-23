@@ -208,8 +208,84 @@
   }
 
   /** Speak for a game event (from the TV display). */
+  /* ---------- fun facts & shout-outs about players (rebuy / bust-out) ---------- */
+  const LEAD = {
+    da: [(n) => 'Fra nissernes notesbog: ', (n) => 'Julemanden har hørt et rygte: ', (n) => `Lille julefact om ${n}: `, (n) => `Og vidste I godt det her om ${n}? `],
+    en: [(n) => "From the elves' notebook: ", (n) => 'Santa heard a little rumour: ', (n) => `Fun fact about ${n}: `, (n) => `And did you know this about ${n}? `],
+  };
+  const dur = (ms, lang) => {
+    const h = Math.floor(ms / 3600000);
+    const m = Math.round((ms % 3600000) / 60000);
+    if (lang === 'da') return h ? `${h} ${h === 1 ? 'time' : 'timer'} og ${m} minutter` : `${m} minutter`;
+    return h ? `${h} ${h === 1 ? 'hour' : 'hours'} and ${m} minutes` : `${m} minutes`;
+  };
+  // built-in shout-outs, used when a player's own facts have all been told
+  const SHOUT = {
+    da: {
+      rebuy: [
+        (p) => `${p.name} har nu købt sig ind ${p.rebuys} ${p.rebuys === 1 ? 'gang' : 'gange'}. Julemanden kalder det en investering i julestemningen!`,
+        (p) => `Nisserne har noteret det: ${p.name} giver aldrig op!`,
+        (p) => `${p.name} tror stadig på julemirakler. Det gør julemanden også!`,
+        (p) => `Rudolf ville have gjort præcis det samme, ${p.name}!`,
+        (p) => `Der er altid plads til én gave mere under træet, ${p.name}.`,
+        (p) => `Modigt, ${p.name}! Julemanden kan godt lide en spiller med julehumør.`,
+      ],
+      out: [
+        (p, x) => (x.played ? `${p.name} holdt ud i ${x.played}. Respekt fra Nordpolen!` : `Respekt fra Nordpolen, ${p.name}!`),
+        (p) => `Der står risalamande i køkkenet til dig, ${p.name}.`,
+        (p) => `${p.name}, du står stadig på den søde liste … næsten.`,
+        (p) => `Bedre held næste jul, ${p.name}!`,
+        (p) => `${p.name} får en ekstra småkage som trøst.`,
+        (p) => `Selv julemanden taber nogle gange, ${p.name}.`,
+      ],
+    },
+    en: {
+      rebuy: [
+        (p) => `${p.name} has now bought back in ${p.rebuys} ${p.rebuys === 1 ? 'time' : 'times'}. Santa calls that an investment in Christmas spirit!`,
+        (p) => `The elves have noted it: ${p.name} never gives up!`,
+        (p) => `${p.name} still believes in Christmas miracles. So does Santa!`,
+        (p) => `Rudolph would have done exactly the same, ${p.name}!`,
+        (p) => `There's always room for one more present under the tree, ${p.name}.`,
+        (p) => `Brave move, ${p.name}! Santa likes a player with Christmas spirit.`,
+      ],
+      out: [
+        (p, x) => (x.played ? `${p.name} lasted ${x.played}. Respect from the North Pole!` : `Respect from the North Pole, ${p.name}!`),
+        (p) => `There's rice pudding waiting in the kitchen for you, ${p.name}.`,
+        (p) => `${p.name}, you're still on the nice list … almost.`,
+        (p) => `Better luck next Christmas, ${p.name}!`,
+        (p) => `${p.name} gets an extra cookie as a consolation prize.`,
+        (p) => `Even Santa loses sometimes, ${p.name}.`,
+      ],
+    },
+  };
+  const storeKey = (state, id) => `pt-shout:${state.id}:${id}`;
+  function nextShout(kind, p, state, lang) {
+    const list = (SHOUT[lang] || SHOUT.en)[kind];
+    let used = [];
+    try { used = JSON.parse(localStorage.getItem(storeKey(state, p.id)) || '[]'); } catch { /* private mode */ }
+    let free = list.map((_, i) => kind + i).filter((k) => !used.includes(k));
+    if (!free.length) { used = used.filter((k) => !k.startsWith(kind)); free = list.map((_, i) => kind + i); }
+    const k = free[Math.floor(Math.random() * free.length)];
+    try { localStorage.setItem(storeKey(state, p.id), JSON.stringify([...used, k])); } catch { /* ignore */ }
+    const played = p.eliminatedAt && state.startedAt ? dur(p.eliminatedAt - state.startedAt, lang) : '';
+    return list[Number(k.slice(kind.length))](p, { played });
+  }
+  /** The extra sentence about a player: one of their own facts first, then a shout-out. */
+  function extraFor(e, state) {
+    if (e.type !== 'eliminated' && e.type !== 'rebuy') return '';
+    const lang = cfg.lang;
+    const p = state.players.find((x) => x.id === e.playerId) || { id: e.playerId, name: e.name, rebuys: e.rebuys || 1 };
+    if (e.fact) {
+      const f = /[.!?…]$/.test(e.fact) ? e.fact : e.fact + '.';
+      return pick(LEAD[lang] || LEAD.en)(p.name) + f;
+    }
+    return cfg.voice === 'santa' || cfg.voice === 'off' ? nextShout(e.type === 'rebuy' ? 'rebuy' : 'out', p, state, lang) : '';
+  }
+
   function handle(e, state) {
+    if (state && (e.type === 'eliminated' || e.type === 'rebuy') && e.extra === undefined) e.extra = extraFor(e, state);
     if (!state || cfg.voice === 'off' || !enabled || !speaker) return;
+    const withExtra = (txt) => (e.extra ? `${txt} ${e.extra}` : txt);
     const L = LINES[cfg.lang] || LINES.en;
     const st = cfg.voice === 'santa' ? 'santa' : 'normal';
     const cur = state.config.currency;
@@ -227,13 +303,13 @@
         break;
       }
       case 'eliminated':
-        if (state.derived.finished) say(line('out')(e.name, L.place(e.place), money(e.prize)));
-        else if (e.burstBubble) say(line('burst')(e.name, L.place(e.place)));
-        else say(line('out')(e.name, L.place(e.place), money(e.prize)));
+        if (state.derived.finished) say(withExtra(line('out')(e.name, L.place(e.place), money(e.prize))));
+        else if (e.burstBubble) say(withExtra(line('burst')(e.name, L.place(e.place))));
+        else say(withExtra(line('out')(e.name, L.place(e.place), money(e.prize))));
         break;
       case 'bubble': say(line('bubble')()); break;
       case 'headsUp': say(line('headsUp')(e.a.name, e.b.name)); break;
-      case 'rebuy': say(line(e.reentry ? 'reentry' : 'rebuy')(e.name)); break;
+      case 'rebuy': say(withExtra(line(e.reentry ? 'reentry' : 'rebuy')(e.name))); break;
       case 'addon': say(line('addon')(e.name)); break;
       case 'winner': say(line('winner')(e.name, money(e.prize))); break;
       case 'minute': say(line('minute')); break;
@@ -271,6 +347,7 @@
     },
     onBeforeSpeak(fn) { beforeSpeak = fn; },
     handle,
+    extraFor,
     say,
     test(c, opts = {}) { this.unlock({ claim: false }); const lang = (c && c.lang) || cfg.lang; const v = (c && c.voice) || cfg.voice; say((LINES[lang] || LINES.en).test[v === 'santa' ? 'santa' : 'normal'], { voice: v === 'off' ? 'normal' : v, lang, browser: opts.browser }); },
     get realVoice() { return realVoice; },

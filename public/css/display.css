@@ -438,3 +438,8 @@ body.display.cursor-hidden, body.display.cursor-hidden * { cursor: none; }
 .br-p { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 90px; }
 .br-p .ring { position: relative; border-radius: 50%; padding: 3px; background: conic-gradient(var(--red-2), var(--gold), var(--red-2)); }
 .br-p span { font-size: 16px; font-weight: 800; }
+
+/* fun fact under the name in the bust-out / rebuy moment */
+.spot .fact { max-width: 1100px; margin: 22px auto 0; font-size: 34px; font-weight: 600; font-style: italic; line-height: 1.35; color: #ffe9b0;
+  opacity: 0; animation: factIn .8s ease-out .9s forwards; }
+@keyframes factIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }

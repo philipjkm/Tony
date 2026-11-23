@@ -12,7 +12,7 @@
     <a class="brand" href="/"><div class="brand-mark">♠</div><span>Tournament Settings</span></a>
     <nav class="s-nav">
       <a href="#general">General</a><a href="#santa">Santa voice</a><a href="#money">Buy-in &amp; Pool</a><a href="#payouts">Payouts</a>
-      <a href="#blinds">Blinds</a><a href="#players">Players</a><a href="#chips">Chips</a>
+      <a href="#blinds">Blinds</a><a href="#players">Players</a><a href="#notes">Santa's notes</a><a href="#chips">Chips</a>
     </nav>
     <div class="s-top-links"><a class="btn" href="/display" target="_blank">📺 <span class="lbl">Display</span></a><a class="btn btn-red" href="/remote">📱 <span class="lbl">Remote</span></a></div>
   </header>
@@ -129,6 +129,12 @@
         <input id="pl-name" type="text" placeholder="Player name" maxlength="40" autocomplete="off">
         <button class="btn btn-red" type="submit">＋ Add player</button>
       </form>
+    </section>
+
+    <section class="card" id="notes">
+      <h2>🎅 Santa's notes about the players</h2>
+      <p class="help">Write fun facts or shout-outs about each player, one per line. When a player <b>rebuys or goes out</b>, Santa tells one they haven't heard yet, so nothing is repeated for the same person. When someone's own facts run out, Santa uses his own shout-outs. Write them the way Santa should say them, in Danish if the announcer speaks Danish.</p>
+      <div class="notes-list" id="notes-list"></div>
     </section>
 
     <section class="card" id="chips">

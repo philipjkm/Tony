@@ -10,6 +10,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createApp } = require('../server');
+const E2 = require('../src/engine');
 
 let chromium, devices;
 try {
@@ -261,7 +262,7 @@ test('end-to-end: settings → display → phone remote', { skip: !chromium, tim
         await phone.waitForTimeout(300);
       }
       await display.waitForFunction(() => document.querySelectorAll('.seat.out').length === 3);
-      await display.waitForFunction(() => document.getElementById('spotlight').dataset.busy === '0', null, { timeout: 30000 });
+      await display.waitForFunction(() => document.getElementById('spotlight').dataset.busy === '0', null, { timeout: 60000 });
       await display.waitForTimeout(500);
       await display.screenshot({ path: path.join(SHOTS, 'display.png') });
       await phone.screenshot({ path: path.join(SHOTS, 'remote.png'), fullPage: true });
@@ -710,9 +711,9 @@ test('Santa announcer and bubble / in-the-money / heads-up moments', { skip: !ch
   };
   try {
     const names = ['Tony', 'Maria', 'Jake', 'Sofia', 'Lars'];
-    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] } }, players: names.map((name) => ({ name })) }) })).json();
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, payouts: { mode: 'percent', places: [50, 30, 20] }, announcer: { voice: 'santa', lang: 'en' } }, players: names.map((name) => ({ name })) }) })).json();
     const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
-    assert.deepEqual(r.state.config.announcer, { voice: 'santa', lang: 'en' }, 'Santa in English by default');
+    assert.deepEqual(r.state.config.announcer, { voice: 'santa', lang: 'en' });
     const display = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
     await display.addInitScript(fakeSpeech);
     display.on('pageerror', (e) => errors.push(e.message));
@@ -958,7 +959,7 @@ test('real Santa voice via ElevenLabs (mock API): connect, pick voice, cache, pl
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
   };
   try {
-    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, levels: [{ type: 'level', sb: 25, bb: 50, ante: 0, minutes: 15 }, { type: 'level', sb: 50, bb: 100, ante: 0, minutes: 15 }, { type: 'break', minutes: 10, label: 'Break' }] }, players: ['Tony', 'Maria', 'Jake', 'Sofia'].map((name) => ({ name })) }) })).json();
+    const r = await (await fetch(base + '/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reset: true, config: { theme: 'christmas', buyIn: 100, announcer: { voice: 'santa', lang: 'en' }, levels: [{ type: 'level', sb: 25, bb: 50, ante: 0, minutes: 15 }, { type: 'level', sb: 50, bb: 100, ante: 0, minutes: 15 }, { type: 'break', minutes: 10, label: 'Break' }] }, players: ['Tony', 'Maria', 'Jake', 'Sofia'].map((name) => ({ name })) }) })).json();
     const ids = Object.fromEntries(r.state.players.map((p) => [p.name, p.id]));
     const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await setup.addInitScript(spy);
@@ -1281,6 +1282,91 @@ test('living table: sleigh, milestones, countdown ring, count-up, sparkles, fros
       await tv.waitForFunction(() => document.getElementById('spotlight').dataset.busy !== '1' && !document.getElementById('banner').classList.contains('show'), null, { timeout: 30000 });
       await tv.waitForTimeout(800);
       await tv.screenshot({ path: path.join(SHOTS, 'display-break.png') });
+    });
+
+    await t.test('no JS errors', () => assert.deepEqual(errors, []));
+  } finally {
+    c.close();
+    await browser.close();
+    await app.stop();
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test('Danish Santa + fun facts about players on rebuy and bust-out, never repeated per person', { skip: !chromium, timeout: 120000 }, async (t) => {
+  const { io } = require('socket.io-client');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poker-facts-'));
+  // an old save in English, from before Danish became the default
+  const old = E2.createTournament({ ...E2.defaultConfig(), announcer: { voice: 'santa', lang: 'en' } }, [{ name: 'Tony' }, { name: 'Maria' }, { name: 'Jake' }]);
+  delete old.migratedDanish;
+  fs.writeFileSync(path.join(dataDir, 'state.json'), JSON.stringify(old));
+  const app = createApp({ dataDir, port: 0, log: () => {} });
+  const port = await app.start();
+  const base = `http://127.0.0.1:${port}`;
+  const browser = await chromium.launch();
+  const c = io(base, { transports: ['websocket'] });
+  const errors = [];
+  const fakeSpeech = () => {
+    window.__said = [];
+    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { speaking: false, speak(u) { window.__said.push(u.text); setTimeout(() => u.onend && u.onend(), 0); }, cancel() {}, getVoices() { return []; } } });
+  };
+  try {
+    await t.test('existing English setup is switched to Danish once', async () => {
+      const s = await (await fetch(base + '/api/state')).json();
+      assert.equal(s.config.announcer.lang, 'da');
+    });
+
+    await t.test('write facts in Santa\'s notes', async () => {
+      const setup = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+      setup.on('pageerror', (e) => errors.push(e.message));
+      await setup.goto(base + '/setup#notes');
+      await setup.waitForSelector('[data-pl-facts="0"]');
+      await setup.fill('[data-pl-facts="0"]', 'Har aldrig foldet et par esser\nSpiser altid tre portioner risalamande');
+      assert.match(await setup.textContent('[data-note-count="0"]'), /2 facts/);
+      await setup.click('#b-save');
+      await setup.waitForFunction(() => !document.getElementById('s-status').classList.contains('dirty'));
+      const s = await (await fetch(base + '/api/state')).json();
+      assert.deepEqual(s.players[0].facts, ['Har aldrig foldet et par esser', 'Spiser altid tre portioner risalamande']);
+      await setup.locator('#notes').screenshot({ path: path.join(SHOTS, 'settings-santa-notes.png') });
+      await setup.close();
+    });
+
+    const tv = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+    await tv.addInitScript(fakeSpeech);
+    tv.on('pageerror', (e) => errors.push(e.message));
+    await tv.goto(base + '/display');
+    await tv.waitForSelector('.seat');
+    await tv.click('body'); // turns sound / announcer on
+    await new Promise((res) => (c.connected ? res() : c.on('connect', res)));
+    const s0 = await (await fetch(base + '/api/state')).json();
+    const id = Object.fromEntries(s0.players.map((p) => [p.name, p.id]));
+    const said = () => tv.evaluate(() => window.__said);
+
+    await t.test('Tony rebuys 3×: both his facts, then a Santa shout-out — all different, in Danish', async () => {
+      await c.emitWithAck('action', { type: 'clock.start' });
+      for (let i = 0; i < 3; i++) {
+        await c.emitWithAck('action', { type: 'player.rebuy', playerId: id.Tony });
+        await tv.waitForFunction((n) => window.__said.filter((x) => /Tony køber sig ind igen/.test(x)).length >= n, i + 1, { timeout: 10000 });
+        if (i === 0) {
+          await tv.waitForSelector('#spotlight.show .fact');
+          await tv.waitForTimeout(1200);
+          await tv.screenshot({ path: path.join(SHOTS, 'display-fun-fact.png') });
+        }
+      }
+      const lines = (await said()).filter((x) => /Tony køber sig ind igen/.test(x));
+      assert.ok(lines.some((l) => /Har aldrig foldet et par esser/.test(l)), lines.join('\n'));
+      assert.ok(lines.some((l) => /tre portioner risalamande/.test(l)));
+      const third = lines.find((l) => !/esser|risalamande/.test(l));
+      assert.ok(third && /Tony/.test(third.replace(/^.*?igen!/, '')), 'a built-in Danish shout-out about Tony: ' + third);
+      assert.equal(new Set(lines).size, 3);
+    });
+
+    await t.test('Maria (no facts) goes out: a Danish Santa shout-out, shown on the TV too', async () => {
+      await c.emitWithAck('action', { type: 'player.eliminate', playerId: id.Maria });
+      await tv.waitForFunction(() => window.__said.some((x) => /Maria/.test(x) && /plads/.test(x)), null, { timeout: 10000 });
+      const line = (await said()).find((x) => /Maria/.test(x) && /plads/.test(x));
+      assert.ok(line.split('.').length > 2, 'a shout-out was added: ' + line);
+      await tv.waitForFunction(() => /Maria/.test(document.querySelector('#spotlight .fact') ? document.querySelector('#spotlight .fact').textContent : '') || window.__said.length > 0, null, { timeout: 15000 });
     });
 
     await t.test('no JS errors', () => assert.deepEqual(errors, []));

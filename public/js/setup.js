@@ -12,7 +12,7 @@
     const s = await fetch('/api/state').then((r) => r.json());
     cfg = s.config;
     PT.useCurrency(cfg.currency);
-    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false }));
+    players = s.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false, facts: p.facts || [] }));
     PT.applyTheme(cfg.theme);
     progress = Object.fromEntries(s.players.map((p) => [p.id, p]));
     renderAll();
@@ -315,7 +315,28 @@
   }
 
   /* ---------------- players ---------------- */
+  function renderNotes() {
+    $('notes-list').innerHTML = players.length ? players.map((p, i) => {
+      const facts = (p.facts || []).filter((f) => String(f).trim());
+      const pr = progress[p.id];
+      const told = pr && pr.factsUsed ? pr.factsUsed.length : 0;
+      return `<div class="note-row">
+        <div class="note-who">${avatarHTML(p, 44)}<div><b>${esc(p.name)}</b><small data-note-count="${i}">${facts.length} ${facts.length === 1 ? 'fact' : 'facts'}${told ? ` · ${told} told tonight` : ''}</small></div></div>
+        <textarea rows="3" data-pl-facts="${i}" placeholder="Fx: Har aldrig foldet et par esser\nKom for sent til sidste juleaften">${esc((p.facts || []).join('\n'))}</textarea>
+      </div>`;
+    }).join('') : '<p class="help">Add players first.</p>';
+  }
+  $('notes-list').addEventListener('input', (e) => {
+    const i = e.target.dataset.plFacts;
+    if (i === undefined) return;
+    players[i].facts = e.target.value.split('\n');
+    const n = players[i].facts.filter((f) => f.trim()).length;
+    document.querySelector(`[data-note-count="${i}"]`).textContent = `${n} ${n === 1 ? 'fact' : 'facts'}`;
+    setDirty(true);
+  });
+
   function renderPlayers() {
+    renderNotes();
     PT.assignHats(players);
     $('pl-count').textContent = `${players.length} registered`;
     $('pl-grid').innerHTML = players.map((p, i) => {
@@ -453,7 +474,7 @@
     if (!res.ok) return toast(res.error || 'Save failed', { error: true });
     cfg = res.state.config;
     PT.useCurrency(cfg.currency);
-    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false }));
+    players = res.state.players.map((p) => ({ id: p.id, name: p.name, photo: p.photo, hat: p.hat, paysExtra: p.paysExtra !== false, facts: p.facts || [] }));
     progress = Object.fromEntries(res.state.players.map((p) => [p.id, p]));
     renderAll();
     setDirty(false);
@@ -470,7 +491,7 @@
   $('b-default-save').onclick = async () => {
     const res = await fetch('/api/default', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ config: cfg, players: players.map(({ id, name, photo, hat, paysExtra }) => ({ id, name, photo, hat, paysExtra })) }),
+      body: JSON.stringify({ config: cfg, players: players.map(({ id, name, photo, hat, paysExtra, facts }) => ({ id, name, photo, hat, paysExtra, facts })) }),
     }).then((r) => r.json()).catch(() => ({ ok: false }));
     toast(res.ok ? '⭐ Saved as your default setup' : 'Could not save the default', { error: !res.ok });
   };

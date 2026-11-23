@@ -433,14 +433,16 @@
         if (s && s.derived.finished) break; // final bust → champion screen instead
         spotlight(`<div class="spot"><div class="ring">${avatarHTML(e, 260)}</div>
           <div class="tag">ELIMINATED</div><div class="nm">${esc(e.name)}</div>
-          <div class="sub">Finishes ${ordinal(e.place)}${e.prize ? ` · wins <b>${fmtMoney(e.prize, cur)}</b>` : ''}</div></div>`);
+          <div class="sub">Finishes ${ordinal(e.place)}${e.prize ? ` · wins <b>${fmtMoney(e.prize, cur)}</b>` : ''}</div>
+          ${e.extra ? `<div class="fact">${esc(e.extra)}</div>` : ''}</div>`, e.extra ? 6500 : 4200);
         break;
       case 'rebuy':
         sfx('kaching');
         pulseSeat(e.playerId, 'flash');
         spotlight(`<div class="spot good"><div class="ring">${avatarHTML(e, 200)}</div>
           <div class="tag">${e.reentry ? 'RE-ENTRY' : 'REBUY'}</div><div class="nm">${esc(e.name)}</div>
-          <div class="sub">${s ? '+' + fmtNum(s.config.rebuy.chips) + ' chips' : ''}</div></div>`, 2800);
+          <div class="sub">${s ? '+' + fmtNum(s.config.rebuy.chips) + ' chips' : ''}</div>
+          ${e.extra ? `<div class="fact">${esc(e.extra)}</div>` : ''}</div>`, e.extra ? 5500 : 2800);
         break;
       case 'addon':
         sfx('kaching');

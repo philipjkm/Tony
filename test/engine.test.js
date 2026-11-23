@@ -369,3 +369,27 @@ test('all browser scripts are valid JavaScript', () => {
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(dir, f), 'utf8'), { filename: f }), `${f} has a syntax error`);
   }
 });
+
+test('Danish announcer by default', () => {
+  assert.deepEqual(E.defaultConfig().announcer, { voice: 'santa', lang: 'da' });
+  assert.equal(E.normalizeConfig({}).announcer.lang, 'da');
+  assert.equal(E.normalizeConfig({ announcer: { lang: 'en' } }).announcer.lang, 'en', 'English can still be chosen');
+});
+
+test('player fun facts: each told once per game, then none left; edits keep what was told', () => {
+  const t = E.createTournament({ ...E.defaultConfig(), rebuy: { enabled: true, price: 10, chips: 100, lastLevel: 0, maxPerPlayer: 0 } }, [
+    { id: 'a', name: 'Tony', facts: 'Har aldrig foldet esser\n\n  Elsker risalamande  \nKom for sent sidste år' },
+    { id: 'b', name: 'Maria' },
+    { id: 'c', name: 'Jake' },
+  ], T0);
+  assert.deepEqual(t.players[0].facts, ['Har aldrig foldet esser', 'Elsker risalamande', 'Kom for sent sidste år']);
+  const told = [];
+  for (let i = 0; i < 3; i++) told.push(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact);
+  assert.equal(new Set(told).size, 3, 'three different facts');
+  assert.equal(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact, null, 'no repeats');
+  assert.equal(E.apply(t, { type: 'player.eliminate', playerId: 'b' }, T0).events[0].fact, null, 'no facts → none');
+  // adding a fact mid-game: only the new one is left to tell
+  E.updateSetup(t, t.config, [{ id: 'a', name: 'Tony', facts: [...t.players[0].facts, 'Ny fact'] }, { id: 'b', name: 'Maria' }, { id: 'c', name: 'Jake' }], T0);
+  assert.equal(E.apply(t, { type: 'player.rebuy', playerId: 'a' }, T0).events[0].fact, 'Ny fact');
+  assert.ok(t.players[0].facts.length <= 25);
+});
